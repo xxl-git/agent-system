@@ -1,0 +1,38 @@
+[
+  {
+    "id": "weather",
+    "name": "天气查询",
+    "version": "1.0.0",
+    "description": "查询城市天气预报（模拟数据）",
+    "category": "data",
+    "author": "agent-system",
+    "dependencies": [],
+    "entry": "index.js",
+    "enabled": true,
+    "installedAt": "2026-06-17T08:00:00.000Z"
+  },
+  {
+    "id": "calculator",
+    "name": "计算器",
+    "version": "1.0.0",
+    "description": "安全数学表达式计算",
+    "category": "dev_tools",
+    "author": "agent-system",
+    "dependencies": [],
+    "entry": "index.js",
+    "enabled": true,
+    "installedAt": "2026-06-17T08:00:00.000Z"
+  },
+  {
+    "id": "markdown-report",
+    "name": "Markdown 报告生成",
+    "version": "1.0.0",
+    "description": "自动生成 Markdown 格式报告并保存到文件",
+    "category": "productivity",
+    "author": "agent-system",
+    "dependencies": [],
+    "entry": "index.js",
+    "enabled": true,
+    "installedAt": "2026-06-17T08:00:00.000Z"
+  }
+]

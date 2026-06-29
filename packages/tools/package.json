@@ -1,0 +1,13 @@
+{
+  "name": "@agent-system/tools",
+  "version": "0.1.0",
+  "description": "Built-in tools: exec, file read/write, web search",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rmdir /s /q dist 2>nul & exit /b 0"
+  },
+  "keywords": ["tools", "sandbox", "exec"],
+  "license": "MIT"
+}

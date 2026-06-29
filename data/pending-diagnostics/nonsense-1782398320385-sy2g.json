@@ -1,0 +1,15 @@
+{
+  "id": "nonsense-1782398320385-sy2g",
+  "timestamp": "2026-06-25T14:38:40.385Z",
+  "model": "qwen3.6-35b-a3b-mtp",
+  "trigger": "nonsense_detected",
+  "source": "NonsenseDetector (10s monitor)",
+  "error": "字符多样性低 (97/251)",
+  "conversation": {
+    "input": "??",
+    "output": "❌ 经过 8 级降级尝试后仍无法完成任务：\n\n**原始任务**: chat-1782398311427\n\n**降级链记录**:\n  1. 故障: unknown — model_unreachable\n  2. 重试 1/2 (等待 2000ms)\n  3.   执行: 退避等待\n  4.   重试失败: model_unreachable\n  5. 重试 2/2 (等待 4000ms)\n  6.   执行: 退避等待\n  7.   重试失败: model_unreachable\n  8. 重试耗尽，走降级\n\n**建议**:\n1. 检查模型服务是否正常运行（LM Studio / Ollama）\n2. 检查网络连接\n3. 尝试手动执行任务\n4. 重启 Agent System 后从检查点恢复\n\n检查点已保存，重启后可通过 `/project resume` 恢复。",
+    "inputLength": 2,
+    "outputLength": 387
+  },
+  "diagnosed": false
+}

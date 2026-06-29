@@ -1,0 +1,24 @@
+{
+  "name": "@agent-system/memory",
+  "version": "0.1.0",
+  "description": "Memory management module for Agent System - DB store, file store, summarizer, session recovery",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "clean": "Remove-Item -Path dist -Recurse -Force",
+    "test": "echo \"No tests yet\""
+  },
+  "dependencies": {
+    "sql.js": "^1.11.0"
+  },
+  "devDependencies": {
+    "@types/sql.js": "^1.4.9",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  },
+  "keywords": ["agent", "memory", "sqlite", "session", "summarizer"],
+  "author": "Agent System Team",
+  "license": "MIT"
+}

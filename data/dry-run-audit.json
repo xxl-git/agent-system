@@ -1,0 +1,1090 @@
+[
+  {
+    "timestamp": "2026-06-17T04:01:35.855Z",
+    "sessionId": "test-audit-1781668895854",
+    "category": "session",
+    "action": "start",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {}
+  },
+  {
+    "timestamp": "2026-06-17T04:01:35.856Z",
+    "sessionId": "test-audit-1781668895854",
+    "category": "session",
+    "action": "end",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "summary": "OK"
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:01:35.856Z",
+    "sessionId": "test-audit-1781668895854",
+    "category": "tool_call",
+    "action": "execute",
+    "target": "write_file",
+    "params": {
+      "path": "/tmp/test.txt",
+      "size": 1024
+    },
+    "result": "success",
+    "meta": {
+      "durationMs": 150
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:01:35.857Z",
+    "sessionId": "test-audit-1781668895854",
+    "category": "decision",
+    "action": "routing",
+    "target": "Chose best model",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 23
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:01:35.858Z",
+    "sessionId": "test-audit-1781668895854",
+    "category": "error",
+    "action": "exception",
+    "target": "LMStudioAdapter",
+    "params": {
+      "url": "http://localhost:1234"
+    },
+    "result": "failure",
+    "meta": {
+      "errorMessage": "Connection refused"
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:01:35.859Z",
+    "sessionId": "test-audit-1781668895854",
+    "category": "model_switch",
+    "action": "switch",
+    "target": "mistral",
+    "params": {
+      "from": "qwen3.6",
+      "reason": "timeout"
+    },
+    "result": "success",
+    "meta": {
+      "modelBefore": "qwen3.6",
+      "modelAfter": "mistral"
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:01:35.859Z",
+    "sessionId": "test-audit-1781668895854",
+    "category": "recovery",
+    "action": "retry",
+    "target": "chat-task",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 1200
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:01:35.870Z",
+    "sessionId": "test-audit-1781668895854",
+    "category": "tool_call",
+    "action": "execute",
+    "target": "read_file",
+    "params": {
+      "content": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx..."
+    },
+    "result": "success",
+    "meta": {
+      "durationMs": 10
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:02:13.923Z",
+    "sessionId": "test-audit-1781668933923",
+    "category": "session",
+    "action": "start",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {}
+  },
+  {
+    "timestamp": "2026-06-17T04:02:13.923Z",
+    "sessionId": "test-audit-1781668933923",
+    "category": "session",
+    "action": "end",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "summary": "OK"
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:02:13.924Z",
+    "sessionId": "test-audit-1781668933923",
+    "category": "tool_call",
+    "action": "execute",
+    "target": "write_file",
+    "params": {
+      "path": "/tmp/test.txt",
+      "size": 1024
+    },
+    "result": "success",
+    "meta": {
+      "durationMs": 150
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:02:13.924Z",
+    "sessionId": "test-audit-1781668933923",
+    "category": "decision",
+    "action": "routing",
+    "target": "Chose best model",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 23
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:02:13.925Z",
+    "sessionId": "test-audit-1781668933923",
+    "category": "error",
+    "action": "exception",
+    "target": "LMStudioAdapter",
+    "params": {
+      "url": "http://localhost:1234"
+    },
+    "result": "failure",
+    "meta": {
+      "errorMessage": "Connection refused"
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:02:13.926Z",
+    "sessionId": "test-audit-1781668933923",
+    "category": "model_switch",
+    "action": "switch",
+    "target": "mistral",
+    "params": {
+      "from": "qwen3.6",
+      "reason": "timeout"
+    },
+    "result": "success",
+    "meta": {
+      "modelBefore": "qwen3.6",
+      "modelAfter": "mistral"
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:02:13.927Z",
+    "sessionId": "test-audit-1781668933923",
+    "category": "recovery",
+    "action": "retry",
+    "target": "chat-task",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 1200
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:02:13.936Z",
+    "sessionId": "test-audit-1781668933923",
+    "category": "tool_call",
+    "action": "execute",
+    "target": "read_file",
+    "params": {
+      "content": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx..."
+    },
+    "result": "success",
+    "meta": {
+      "durationMs": 10
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:28:29.197Z",
+    "sessionId": "session-1781670509196",
+    "category": "session",
+    "action": "start",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {}
+  },
+  {
+    "timestamp": "2026-06-17T04:53:10.404Z",
+    "sessionId": "session-1781670509196",
+    "category": "decision",
+    "action": "chat",
+    "target": "你好！我是由通义实验室团队研发的大语言模型。今天给你三个实用建议：\n1. **聚焦单任务**：选出一项最重要或最拖延的事，用25分钟专注完成，避免多线程切换消耗精力。\n2. **主动休息**：每工作90分钟起身活动3-5分钟（拉伸/走动/远眺），能显著提升后续效率与注意力。\n3. **微复盘**：睡前花2分钟记录“今日做对的一件事”和“明日可优化的一点”，持续积累正向反馈。\n\n如有具体领域（如学习",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 54346,
+      "inputLength": 21
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:53:10.418Z",
+    "sessionId": "session-1781670509196",
+    "category": "decision",
+    "action": "command",
+    "target": "Agent v0.3.0 (Phase 5)\nSession: 70509196\nDB: OK\nModel: OK qwen3.6-35b-a3b-mtp\nSkills: 0\nAgents: 0\nRecovery: 14 pending\n工具: 4 个已注册\n历史会话: 0 次\n完成子任务: 0 个\n心跳: 运行中\nProject: hb-test-1781664754462 [         ",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 8,
+      "inputLength": 7
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:53:10.424Z",
+    "sessionId": "session-1781670509196",
+    "category": "decision",
+    "action": "command",
+    "target": "Models:\n  deepseek-chat\n  qwen3.6-35b-a3b-mtp",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 1,
+      "inputLength": 7
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:55:22.895Z",
+    "sessionId": "session-1781670509196",
+    "category": "decision",
+    "action": "query",
+    "target": "`typeof` 和 `keyof` 都是 TypeScript 的**编译期类型操作符**，但作用对象与返回值不同：\n\n- **`typeof`**：作用于**值/变量**，返回其对应的类型。  \n  `const user = { name: \"A\" }` → `typeof user` 为 `{ name: string }`\n- **`keyof`**：作用于**对象类型/接口**，提取所",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 88728,
+      "inputLength": 34
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:58:51.689Z",
+    "sessionId": "session-1781670509196",
+    "category": "decision",
+    "action": "command",
+    "target": "📋 Summary for session-1781:\n  The session began with a request for productivity tips, followed by system status and model verification using slash commands. The user then asked a technical question c",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 208788,
+      "inputLength": 14
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:58:51.698Z",
+    "sessionId": "session-1781670509196",
+    "category": "decision",
+    "action": "command",
+    "target": "Audit: /audit summary|recent|errors|search",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 2,
+      "inputLength": 13
+    }
+  },
+  {
+    "timestamp": "2026-06-17T04:58:51.723Z",
+    "sessionId": "session-1781670509196",
+    "category": "session",
+    "action": "end",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "summary": "📊 审计摘要 (7 events)\n  ✅ success: 7  ❌ failure: 0  ⚠️ degraded: 0\n  ⏱️  avg: 58646ms (6 ops)\n  📂 decision(6), session(1)"
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:01:05.060Z",
+    "sessionId": "session-1781672465059",
+    "category": "session",
+    "action": "start",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {}
+  },
+  {
+    "timestamp": "2026-06-17T05:09:10.554Z",
+    "sessionId": "session-1781672465059",
+    "category": "decision",
+    "action": "chat",
+    "target": "你好！感谢交流。我由阿里巴巴通义实验室团队共同研发，没有单一的创建者，但很高兴为你服务。今日建议：\n1. **专注**：用番茄钟拆分任务，减少多任务切换；\n2. **健康**：定时起身活动、保持饮水与规律作息；\n3. **成长**：每天留15分钟阅读或练习新技能。\n\n若有具体场景（工作/生活/技术），告诉我可给更精准方案。",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 231176,
+      "inputLength": 21
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:09:10.561Z",
+    "sessionId": "session-1781672465059",
+    "category": "decision",
+    "action": "command",
+    "target": "Agent v0.3.0 (Phase 5)\nSession: 72465059\nDB: OK\nModel: OK qwen3.6-35b-a3b-mtp\nSkills: 0\nAgents: 0\nRecovery: 14 pending\n工具: 4 个已注册\n历史会话: 0 次\n完成子任务: 0 个\n心跳: 运行中\nProject: hb-test-1781664754462 [=====    ",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 3,
+      "inputLength": 7
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:09:10.564Z",
+    "sessionId": "session-1781672465059",
+    "category": "decision",
+    "action": "command",
+    "target": "Models:\n  deepseek-chat\n  qwen3.6-35b-a3b-mtp",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 0,
+      "inputLength": 7
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:11:12.117Z",
+    "sessionId": "session-1781673072116",
+    "category": "session",
+    "action": "start",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {}
+  },
+  {
+    "timestamp": "2026-06-17T05:12:12.429Z",
+    "sessionId": "session-1781673072116",
+    "category": "decision",
+    "action": "task",
+    "target": "📋 任务完成: 1/1\n  [✅] 创建文件: 者。今天有什么建议给我？: 文件已写入: 者。今天有什么建议给我？ (0 字节)",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 44,
+      "inputLength": 21
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:12:12.441Z",
+    "sessionId": "session-1781673072116",
+    "category": "decision",
+    "action": "command",
+    "target": "Agent v0.3.0 (Phase 5)\nSession: 73072116\nDB: OK\nModel: OK qwen3.6-35b-a3b-mtp\nSkills: 0\nAgents: 0\nRecovery: 14 pending\n工具: 4 个已注册\n历史会话: 1 次\n完成子任务: 1 个\n心跳: 运行中\nProject: hb-test-1781664754462 [===      ",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 7,
+      "inputLength": 7
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:12:12.447Z",
+    "sessionId": "session-1781673072116",
+    "category": "decision",
+    "action": "command",
+    "target": "Models:\n  deepseek-chat\n  qwen3.6-35b-a3b-mtp",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 0,
+      "inputLength": 7
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:12:12.464Z",
+    "sessionId": "session-1781673072116",
+    "category": "decision",
+    "action": "command",
+    "target": "[HealthMonitor Status]\n  Token: idle\n  Active tool monitors: 0\n  Empty calls: 0 / 5\n  Model: reachable\n\n[CircuitBreaker Status]\n  Models: 1 (OPEN: 0)\n  Tools: 0 (OPEN: 0)\n  Paths: 0 (OPEN: 0)\n\n📋 待恢复任",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 12,
+      "inputLength": 11
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:13:12.519Z",
+    "sessionId": "session-1781673072116",
+    "category": "decision",
+    "action": "task",
+    "target": "📋 任务完成: 1/1\n  [✅] 创建文件: 个测试任务：验证审计日志写入功能: 文件已写入: 个测试任务：验证审计日志写入功能 (0 字节)",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 33,
+      "inputLength": 19
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:13:12.528Z",
+    "sessionId": "session-1781673072116",
+    "category": "decision",
+    "action": "command",
+    "target": "Projects:\n  * hb-test-1781664754462 [in_progress] [===       ] 25%\n    hb-test-1781668986498 [in_progress] [          ] 0%\n    hb-test-1781669867159 [in_progress] [          ] 0%\n    hb-test-178167005",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 4,
+      "inputLength": 13
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:15:45.671Z",
+    "sessionId": "",
+    "category": null,
+    "action": "",
+    "target": "",
+    "params": {},
+    "result": "",
+    "meta": {
+      "timestamp": "2026-06-17T05:15:45.670Z",
+      "sessionId": "dry-1781673345644",
+      "category": "session",
+      "action": "action_0",
+      "target": "target_0",
+      "params": {},
+      "result": "success",
+      "meta": {
+        "durationMs": 10
+      }
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:15:45.673Z",
+    "sessionId": "",
+    "category": null,
+    "action": "",
+    "target": "",
+    "params": {},
+    "result": "",
+    "meta": {
+      "timestamp": "2026-06-17T05:15:45.673Z",
+      "sessionId": "dry-1781673345644",
+      "category": "decision",
+      "action": "action_1",
+      "target": "target_1",
+      "params": {},
+      "result": "success",
+      "meta": {
+        "durationMs": 15
+      }
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:15:45.675Z",
+    "sessionId": "",
+    "category": null,
+    "action": "",
+    "target": "",
+    "params": {},
+    "result": "",
+    "meta": {
+      "timestamp": "2026-06-17T05:15:45.674Z",
+      "sessionId": "dry-1781673345644",
+      "category": "tool_call",
+      "action": "action_2",
+      "target": "target_2",
+      "params": {},
+      "result": "success",
+      "meta": {
+        "durationMs": 20
+      }
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:15:45.676Z",
+    "sessionId": "",
+    "category": null,
+    "action": "",
+    "target": "",
+    "params": {},
+    "result": "",
+    "meta": {
+      "timestamp": "2026-06-17T05:15:45.676Z",
+      "sessionId": "dry-1781673345644",
+      "category": "error",
+      "action": "action_3",
+      "target": "target_3",
+      "params": {},
+      "result": "success",
+      "meta": {
+        "durationMs": 25
+      }
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:15:45.678Z",
+    "sessionId": "",
+    "category": null,
+    "action": "",
+    "target": "",
+    "params": {},
+    "result": "",
+    "meta": {
+      "timestamp": "2026-06-17T05:15:45.678Z",
+      "sessionId": "dry-1781673345644",
+      "category": "recovery",
+      "action": "action_4",
+      "target": "target_4",
+      "params": {},
+      "result": "success",
+      "meta": {
+        "durationMs": 30
+      }
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:15:45.680Z",
+    "sessionId": "",
+    "category": null,
+    "action": "",
+    "target": "",
+    "params": {},
+    "result": "",
+    "meta": {
+      "timestamp": "2026-06-17T05:15:45.679Z",
+      "sessionId": "dry-1781673345644",
+      "category": "checkpoint",
+      "action": "action_5",
+      "target": "target_5",
+      "params": {},
+      "result": "success",
+      "meta": {
+        "durationMs": 35
+      }
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:15:45.681Z",
+    "sessionId": "",
+    "category": null,
+    "action": "",
+    "target": "",
+    "params": {},
+    "result": "",
+    "meta": {
+      "timestamp": "2026-06-17T05:15:45.681Z",
+      "sessionId": "dry-1781673345644",
+      "category": "degradation",
+      "action": "action_6",
+      "target": "target_6",
+      "params": {},
+      "result": "degraded",
+      "meta": {
+        "durationMs": 40
+      }
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:15:45.683Z",
+    "sessionId": "",
+    "category": null,
+    "action": "",
+    "target": "",
+    "params": {},
+    "result": "",
+    "meta": {
+      "timestamp": "2026-06-17T05:15:45.682Z",
+      "sessionId": "dry-1781673345644",
+      "category": "model_switch",
+      "action": "action_7",
+      "target": "target_7",
+      "params": {},
+      "result": "failure",
+      "meta": {
+        "durationMs": 45
+      }
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:16:45.128Z",
+    "sessionId": "",
+    "category": "session",
+    "action": "action_0",
+    "target": "target_0",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 10
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:16:45.130Z",
+    "sessionId": "",
+    "category": "decision",
+    "action": "action_1",
+    "target": "target_1",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 15
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:16:45.131Z",
+    "sessionId": "",
+    "category": "tool_call",
+    "action": "action_2",
+    "target": "target_2",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 20
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:16:45.133Z",
+    "sessionId": "",
+    "category": "error",
+    "action": "action_3",
+    "target": "target_3",
+    "params": {},
+    "result": "failure",
+    "meta": {
+      "durationMs": 25
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:16:45.137Z",
+    "sessionId": "",
+    "category": "recovery",
+    "action": "action_4",
+    "target": "target_4",
+    "params": {},
+    "result": "recovered",
+    "meta": {
+      "durationMs": 30
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:16:45.138Z",
+    "sessionId": "",
+    "category": "checkpoint",
+    "action": "action_5",
+    "target": "target_5",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 35
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:16:45.140Z",
+    "sessionId": "",
+    "category": "degradation",
+    "action": "action_6",
+    "target": "target_6",
+    "params": {},
+    "result": "degraded",
+    "meta": {
+      "durationMs": 40
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:16:45.142Z",
+    "sessionId": "",
+    "category": "model_switch",
+    "action": "action_7",
+    "target": "target_7",
+    "params": {},
+    "result": "failure",
+    "meta": {
+      "durationMs": 45
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:17:51.068Z",
+    "sessionId": "",
+    "category": "session",
+    "action": "action_0",
+    "target": "target_0",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 10
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:17:51.069Z",
+    "sessionId": "",
+    "category": "decision",
+    "action": "action_1",
+    "target": "target_1",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 15
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:17:51.070Z",
+    "sessionId": "",
+    "category": "tool_call",
+    "action": "action_2",
+    "target": "target_2",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 20
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:17:51.071Z",
+    "sessionId": "",
+    "category": "error",
+    "action": "action_3",
+    "target": "target_3",
+    "params": {},
+    "result": "failure",
+    "meta": {
+      "durationMs": 25
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:17:51.074Z",
+    "sessionId": "",
+    "category": "recovery",
+    "action": "action_4",
+    "target": "target_4",
+    "params": {},
+    "result": "recovered",
+    "meta": {
+      "durationMs": 30
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:17:51.076Z",
+    "sessionId": "",
+    "category": "checkpoint",
+    "action": "action_5",
+    "target": "target_5",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 35
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:17:51.077Z",
+    "sessionId": "",
+    "category": "degradation",
+    "action": "action_6",
+    "target": "target_6",
+    "params": {},
+    "result": "degraded",
+    "meta": {
+      "durationMs": 40
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:17:51.080Z",
+    "sessionId": "",
+    "category": "model_switch",
+    "action": "action_7",
+    "target": "target_7",
+    "params": {},
+    "result": "failure",
+    "meta": {
+      "durationMs": 45
+    }
+  },
+  {
+    "timestamp": "2026-06-17T05:18:45.484Z",
+    "sessionId": "session-1781672465059",
+    "category": "decision",
+    "action": "query",
+    "target": "❌ 经过 2 级降级尝试后仍无法完成任务：\n\n**原始任务**: chat-1781673219692\n\n**降级链记录**:\n  1. 故障: model_unreachable — fetch failed\n  2. 恢复总超时，走降级\n\n**建议**:\n1. 检查模型服务是否正常运行（LM Studio / Ollama）\n2. 检查网络连接\n3. 尝试手动执行任务\n4. 重启 Agent ",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 305789,
+      "inputLength": 34
+    }
+  },
+  {
+    "timestamp": "2026-06-17T07:52:55.606Z",
+    "sessionId": "",
+    "category": "session",
+    "action": "action_0",
+    "target": "target_0",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 10
+    }
+  },
+  {
+    "timestamp": "2026-06-17T07:52:55.608Z",
+    "sessionId": "",
+    "category": "decision",
+    "action": "action_1",
+    "target": "target_1",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 15
+    }
+  },
+  {
+    "timestamp": "2026-06-17T07:52:55.610Z",
+    "sessionId": "",
+    "category": "tool_call",
+    "action": "action_2",
+    "target": "target_2",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 20
+    }
+  },
+  {
+    "timestamp": "2026-06-17T07:52:55.611Z",
+    "sessionId": "",
+    "category": "error",
+    "action": "action_3",
+    "target": "target_3",
+    "params": {},
+    "result": "failure",
+    "meta": {
+      "durationMs": 25
+    }
+  },
+  {
+    "timestamp": "2026-06-17T07:52:55.615Z",
+    "sessionId": "",
+    "category": "recovery",
+    "action": "action_4",
+    "target": "target_4",
+    "params": {},
+    "result": "recovered",
+    "meta": {
+      "durationMs": 30
+    }
+  },
+  {
+    "timestamp": "2026-06-17T07:52:55.617Z",
+    "sessionId": "",
+    "category": "checkpoint",
+    "action": "action_5",
+    "target": "target_5",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 35
+    }
+  },
+  {
+    "timestamp": "2026-06-17T07:52:55.619Z",
+    "sessionId": "",
+    "category": "degradation",
+    "action": "action_6",
+    "target": "target_6",
+    "params": {},
+    "result": "degraded",
+    "meta": {
+      "durationMs": 40
+    }
+  },
+  {
+    "timestamp": "2026-06-17T07:52:55.623Z",
+    "sessionId": "",
+    "category": "model_switch",
+    "action": "action_7",
+    "target": "target_7",
+    "params": {},
+    "result": "failure",
+    "meta": {
+      "durationMs": 45
+    }
+  },
+  {
+    "timestamp": "2026-06-17T08:03:38.782Z",
+    "sessionId": "session-1781683418780",
+    "category": "session",
+    "action": "start",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {}
+  },
+  {
+    "timestamp": "2026-06-17T08:05:09.118Z",
+    "sessionId": "session-1781683509117",
+    "category": "session",
+    "action": "start",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {}
+  },
+  {
+    "timestamp": "2026-06-17T08:07:21.287Z",
+    "sessionId": "session-1781683641286",
+    "category": "session",
+    "action": "start",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {}
+  },
+  {
+    "timestamp": "2026-06-17T08:09:37.290Z",
+    "sessionId": "session-1781683777289",
+    "category": "session",
+    "action": "start",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {}
+  },
+  {
+    "timestamp": "2026-06-17T08:10:59.994Z",
+    "sessionId": "session-1781683859993",
+    "category": "session",
+    "action": "start",
+    "target": "agent",
+    "params": {},
+    "result": "success",
+    "meta": {}
+  },
+  {
+    "timestamp": "2026-06-17T08:11:11.877Z",
+    "sessionId": "session-1781683859993",
+    "category": "decision",
+    "action": "chat",
+    "target": "[系统] 模型服务暂时不可用，已自动降级。请稍后重试。",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 8028,
+      "inputLength": 4
+    }
+  },
+  {
+    "timestamp": "2026-06-17T08:11:15.463Z",
+    "sessionId": "session-1781683859993",
+    "category": "decision",
+    "action": "chat",
+    "target": "[系统] 模型服务暂时不可用，已自动降级。请稍后重试。",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 11630,
+      "inputLength": 2
+    }
+  },
+  {
+    "timestamp": "2026-06-17T15:23:03.958Z",
+    "sessionId": "",
+    "category": "session",
+    "action": "action_0",
+    "target": "target_0",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 10
+    }
+  },
+  {
+    "timestamp": "2026-06-17T15:23:03.960Z",
+    "sessionId": "",
+    "category": "decision",
+    "action": "action_1",
+    "target": "target_1",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 15
+    }
+  },
+  {
+    "timestamp": "2026-06-17T15:23:03.960Z",
+    "sessionId": "",
+    "category": "tool_call",
+    "action": "action_2",
+    "target": "target_2",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 20
+    }
+  },
+  {
+    "timestamp": "2026-06-17T15:23:03.960Z",
+    "sessionId": "",
+    "category": "error",
+    "action": "action_3",
+    "target": "target_3",
+    "params": {},
+    "result": "failure",
+    "meta": {
+      "durationMs": 25
+    }
+  },
+  {
+    "timestamp": "2026-06-17T15:23:03.963Z",
+    "sessionId": "",
+    "category": "recovery",
+    "action": "action_4",
+    "target": "target_4",
+    "params": {},
+    "result": "recovered",
+    "meta": {
+      "durationMs": 30
+    }
+  },
+  {
+    "timestamp": "2026-06-17T15:23:03.963Z",
+    "sessionId": "",
+    "category": "checkpoint",
+    "action": "action_5",
+    "target": "target_5",
+    "params": {},
+    "result": "success",
+    "meta": {
+      "durationMs": 35
+    }
+  },
+  {
+    "timestamp": "2026-06-17T15:23:03.963Z",
+    "sessionId": "",
+    "category": "degradation",
+    "action": "action_6",
+    "target": "target_6",
+    "params": {},
+    "result": "degraded",
+    "meta": {
+      "durationMs": 40
+    }
+  },
+  {
+    "timestamp": "2026-06-17T15:23:03.964Z",
+    "sessionId": "",
+    "category": "model_switch",
+    "action": "action_7",
+    "target": "target_7",
+    "params": {},
+    "result": "failure",
+    "meta": {
+      "durationMs": 45
+    }
+  }
+]

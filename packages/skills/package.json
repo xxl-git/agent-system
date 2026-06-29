@@ -1,0 +1,13 @@
+{
+  "name": "@agent-system/skills",
+  "version": "0.1.0",
+  "description": "Skill registry, gap detection, and development pipeline",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rmdir /s /q dist 2>nul & exit /b 0"
+  },
+  "keywords": ["skills", "agent", "tool"],
+  "license": "MIT"
+}

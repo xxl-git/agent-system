@@ -1,0 +1,1368 @@
+﻿// @ts-nocheck
+// Agent 核心循环 — Phase 5 升级版
+// 集成: 意图解析 + 任务编排 + 工具 + 记忆 + 项目 + 智能路由 + 磨合 + 技能生态 + 多Agent + 韧性保障
+import { agentEventBus } from '../agent-event-bus';
+import * as lmstudio_1 from '../../models/adapters/lmstudio';
+import { SmartAdapter } from '@agent-system/llm';
+import * as llm_router_1 from '../../llm/llm-router';
+import * as file_store_1 from '../../memory/file-store';
+import * as db_store_1 from '../../memory/db-store';
+import * as intent_parser_1 from '../intent-parser';
+import * as orchestrator_1 from '../orchestrator';
+import * as project_manager_1 from '../projects/project-manager';
+import * as smart_router_1 from '../../models/router/smart-router';
+import * as break_in_machine_1 from '../../models/adaptation/break-in-machine';
+import * as model_profile_1 from '../../models/profile/model-profile';
+import * as registry_1 from '../../skills/registry';
+import * as gap_detector_1 from '../../skills/gap-detector';
+import * as pipeline_1 from '../../skills/pipeline';
+import * as sub_agent_1 from '../../agents/sub-agent';
+import * as collaboration_1 from '../../agents/collaboration';
+import * as orchestrator_2 from '../../resilience/orchestrator';
+import * as health_monitor_1 from '../../resilience/health-monitor';
+import * as circuit_breaker_1 from '../../resilience/circuit-breaker';
+import * as checkpoint_1 from '../../resilience/checkpoint';
+import * as session_recovery_1 from '../../memory/session-recovery';
+import * as summarizer_1 from '../../memory/summarizer';
+import * as audit_log_1 from '../../audit/audit-log';
+import * as context_manager_1 from '../context-manager';
+import * as idle_task_manager_1 from '../../resilience/idle-task-manager';
+import * as nonsense_detector_1 from '../../resilience/nonsense-detector';
+import * as session_diagnostics_1 from '../../resilience/session-diagnostics';
+import * as agent_system_config_1 from '../../config/agent-system-config';
+import * as prompts_1 from '../../prompts';
+import * as experience_1 from '../../experience';
+import * as path from 'path';
+import logger from '../../logger';
+
+// Phase 1 重构：导入命令处理器
+import { AgentCommandHandler, createCommandHandlerFromAgentCore } from './command-handler';
+// Phase 2 重构：导入聊天处理器
+import { ChatHandler, createChatHandlerFromAgentCore } from './chat-handler';
+
+
+class AgentCore {
+    adapter;
+    llmRouter;
+    intentParser;
+    orchestrator;
+    projectManager;
+    router;
+    breakIn;
+    // Phase 3: 技能生态
+    registry;
+    gapDetector;
+    auditor;
+    developer;
+    tester;
+    equipper;
+    pendingApplies = [];
+    // Phase 4: 多Agent
+    bus;
+    scheduler;
+    merger;
+    subAgents = new Map();
+    // Phase 5: 韧性保障
+    recovery;
+    healthMon;
+    circuitBreaker;
+    checkpointMgr;
+    // Phase 5 P1: 跨会话记忆恢复 + 审计日志
+    sessionRecoverer;
+    auditLog;
+    // P2: 记忆摘要引擎
+    summarizer;
+    lastMemoryInjection = null;
+    // P7: 上下文管理（无上限上下文）
+    ctxManager;
+    // Phase 2-3: 提示词注册表 + 组装器
+    promptRegistry;
+    promptAssembler;
+    _cachedMemoryBlock = '';  // 缓存记忆块供 handleChat 使用
+    // Experience module: 经验模块
+    experienceStore;
+    experienceExtractor;
+    experienceRetriever;
+    experienceCommandHandler;
+    experienceInitialized = false;
+    // 空闲任务 + 会话诊断 + 胡话检测
+    idleTaskMgr;
+    sessionDiag;
+    nonsenseDetector;
+    // Phase 1 重构：命令处理器
+    commandHandler;
+    messages = [];
+    running = false;
+    sessionId;
+    dbInitialized = false;
+    modelOnboarded = false;
+    constructor() {
+        // Phase 0: 初始化配置（必须在所有模块创建之前，确保 YAML 值生效）
+        try { agent_system_config_1.initConfig(); } catch { }
+        const cfg = agent_system_config_1.getConfig();
+        const callTimeout = cfg?.agent?.callTimeoutMs || 60000;
+        const maxRetries = cfg?.agent?.maxRetries ?? 1;
+        const emptyThreshold = cfg?.agent?.emptyLoopThreshold || 3;
+        this.adapter = new SmartAdapter(new lmstudio_1.LMStudioAdapter(), {
+            callTimeoutMs: callTimeout,
+            maxRetries: maxRetries,
+            emptyLoopThreshold: emptyThreshold,
+        });
+        this.llmRouter = llm_router_1.initLLMRouter(this.adapter);
+        // Phase 2-3: 初始化提示词系统
+        const promptsDir = path.join(process.cwd(), 'config', 'prompts');
+        this.promptRegistry = prompts_1.initPromptRegistry(promptsDir);
+        this.promptAssembler = prompts_1.getPromptAssembler();
+        // Experience module: 延迟初始化（需要 async init）
+        this.experienceStore = experience_1.getExperienceStore();
+        this.experienceExtractor = experience_1.getExperienceExtractor();
+        this.experienceRetriever = experience_1.getExperienceRetriever();
+        this.experienceCommandHandler = experience_1.getExperienceCommandHandler();
+        this.intentParser = new intent_parser_1.IntentParser(this.adapter);
+        this.orchestrator = new orchestrator_1.Orchestrator();
+        this.projectManager = project_manager_1.getProjectManager();
+        this.router = smart_router_1.getRouter();
+        this.breakIn = new break_in_machine_1.BreakInMachine(this.adapter.model);
+        // Phase 3
+        this.registry = registry_1.getRegistry();
+        this.gapDetector = gap_detector_1.getGapDetector();
+        this.auditor = new pipeline_1.SkillAuditor();
+        this.developer = new pipeline_1.SkillDeveloper();
+        this.tester = new pipeline_1.SkillTester();
+        this.equipper = new pipeline_1.SkillEquipper();
+        // Phase 4
+        this.bus = new collaboration_1.AgentBus();
+        this.scheduler = new collaboration_1.ParallelScheduler();
+        this.merger = new collaboration_1.ResultMerger();
+        // Phase 5
+        this.recovery = orchestrator_2.getRecoveryOrchestrator();
+        this.healthMon = health_monitor_1.getHealthMonitor();
+        this.circuitBreaker = circuit_breaker_1.getCircuitBreaker();
+        this.checkpointMgr = checkpoint_1.getCheckpointManager();
+        // Phase 5 P1
+        this.sessionRecoverer = session_recovery_1.getSessionRecoverer();
+        this.auditLog = audit_log_1.getAuditLog();
+        // 空闲任务调度 + 会话诊断 + 胡话检测
+        this.idleTaskMgr = idle_task_manager_1.getIdleTaskManager();
+        this.sessionDiag = session_diagnostics_1.getSessionDiagnostics(this.idleTaskMgr);
+        this.nonsenseDetector = nonsense_detector_1.getNonsenseDetector(this.idleTaskMgr);
+        this.sessionId = 'session-' + Date.now();
+        this.auditLog.startSession(this.sessionId);
+        // P7: 初始化上下文管理器
+        const ctxCfg = cfg?.context;
+        this.ctxManager = context_manager_1.getContextManager(ctxCfg);
+        this.ctxManager.updateConfig(ctxCfg || {});
+        // Phase 5: A 型心跳（空闲时主动巡检）
+        this.orchestrator.on('heartbeat', () => {
+            this.onHeartbeat();
+        });
+        // 恢复事件监听 (加审计)
+        this.recovery.on('model_switch_needed', (data) => {
+            logger.warn('[Agent] model switch: ' + data.reason);
+            this.circuitBreaker.modelFailure(data.currentModel, data.reason);
+            this.auditLog.logModelSwitch(data.currentModel, 'fallback', data.reason);
+        });
+        this.recovery.on('context_truncate_needed', () => {
+            // P7: 交给 ContextManager 处理（注意力+压缩+摘要）
+            logger.info('[Agent] context_truncate_needed — 由ContextManager处理');
+        });
+        this.recovery.on('adapter_reset_needed', () => {
+            this.healthMon.reset();
+            this.auditLog.logRecovery('adapter_reset', this.adapter.model, 'success', 0);
+        });
+        this.recovery.on('session_reset_needed', () => {
+            const systemMsg = this.messages[0];
+            this.messages = [systemMsg];
+            this.auditLog.logRecovery('session_reset', this.sessionId, 'success', 0);
+        });
+        this.orchestrator.on('task:done', (task, result) => {
+            logger.info('[Agent] OK: ' + task.title);
+        });
+        this.orchestrator.on('task:failed', (task, result) => {
+            if (result.error) {
+                this.gapDetector.detect({
+                    action: 'execute "' + task.title + '"',
+                    needed: this.extractNeededCap(result.error),
+                    error: result.error,
+                });
+            }
+            logger.warn('[Agent] FAIL: ' + task.title);
+        });
+    }
+    async init() {
+        logger.info('[Agent] ====== 初始化开始 ======');
+        const initStart = Date.now();
+        // Step 0: 配置已在构造函数中加载，跳过
+        // Step 1: 初始化文件记忆存储（必须早于 recordInteraction）
+        try {
+            file_store_1.initMemoryStore(path.join(process.cwd(), 'memory'));
+            logger.debug('[Agent] 文件记忆存储已初始化');
+        }
+        catch (err) {
+            logger.warn('[Agent] 文件记忆初始化失败', err);
+        }
+        // Step 1a: 裁剪过期文件记忆
+        try {
+            const memStore = file_store_1.getMemoryStore();
+            const pruned = memStore.prune(30);
+            if (pruned > 0) {
+                logger.info(`[Agent] 裁剪了 ${pruned} 个过期记忆文件`);
+            }
+        }
+        catch (err) {
+            logger.warn('[Agent] 文件记忆裁剪失败', err);
+        }
+        // Step 2: 清理旧会话检查点（上一轮会话的检查点已过期）
+        try {
+            this.checkpointMgr.clearAll();
+        }
+        catch (err) {
+            logger.warn('[Agent] 检查点清理失败', err);
+        }
+        // Step 3: 初始化数据库（记忆恢复依赖 DB）
+        logger.info('[Agent] Step 3/7: 初始化数据库...');
+        try {
+            const t0 = Date.now();
+            const db = db_store_1.getDBStore();
+            await db.init();
+            db.startSession(this.sessionId);
+            this.dbInitialized = true;
+            logger.info(`[Agent] 数据库已初始化 (${Date.now() - t0}ms): ${this.sessionId}`);
+        }
+        catch (err) {
+            logger.warn('[Agent] DB init failed', err);
+        }
+        // Step 4: 恢复跨会话记忆（DB + 文件层，此时均已就绪）
+        logger.info('[Agent] Step 4/7: 恢复跨会话记忆...');
+        let memoryBlock = '';
+        let memRecoveryTime = 0;
+        try {
+            const t0 = Date.now();
+            this.lastMemoryInjection = this.sessionRecoverer.recover();
+            memRecoveryTime = Date.now() - t0;
+            logger.info(`[Agent] 记忆恢复完成 (${memRecoveryTime}ms): ${this.lastMemoryInjection.recentDecisions.length} 条决策, ${this.lastMemoryInjection.trackedEntities.length} 个实体, ${this.lastMemoryInjection.recentSummaries.length} 条摘要`);
+        }
+        catch (err) {
+            logger.warn('[Agent] memory recovery failed', err);
+        }
+        // Step 5: 初始化摘要引擎
+        logger.info('[Agent] Step 5/7: 初始化摘要引擎...');
+        try {
+            this.summarizer = summarizer_1.getSummarizer({
+                useLLM: true,
+                chatFn: async (prompt) => {
+                    const resp = await llm_router_1.getLLMRouter().call({
+                        taskType: 'summarize',
+                        messages: [{ role: 'user', content: prompt }],
+                    });
+                    return resp.choices?.[0]?.message?.content || '';
+                },
+            });
+            logger.info('[Agent] 摘要引擎已初始化 (LLM模式)');
+            if (this.lastMemoryInjection && this.lastMemoryInjection.systemPromptBlock) {
+                memoryBlock = '\n\n[CONTEXT FROM PAST SESSIONS]\n' + this.lastMemoryInjection.systemPromptBlock;
+                logger.info(`[Agent] 注入 memory block: ${this.lastMemoryInjection.systemPromptBlock.length} 字`);
+            }
+        }
+        catch (err) {
+            logger.warn('[Agent] 摘要引擎初始化失败', err);
+        }
+        // Step 5.5: 初始化经验模块
+        try {
+            await this.experienceStore.init();
+            this.experienceInitialized = true;
+            const expStats = this.experienceStore.getStats();
+            logger.info(`[Agent] 经验模块已初始化: ${expStats.total} 条经验 (active=${expStats.active}, patterns=${expStats.patterns}, pitfalls=${expStats.pitfalls})`);
+        }
+        catch (err) {
+            logger.warn('[Agent] 经验模块初始化失败（非阻塞）', err);
+        }
+        // Step 6: 初始化 system message（Phase 2-3: 使用 PromptRegistry + 动态变量插值）
+        const identityVars = this.getIdentityVars();
+        const identityTpl = this.promptRegistry.get('agent.identity', identityVars);
+        const identityContent = identityTpl.system || 'You are an intelligent Agent assistant. Reply concisely and directly.';
+        this.messages = [{ role: 'system', content: identityContent }];
+        // 缓存 memoryBlock 供 handleChat 的 assembler 使用（不再塞进 system）
+        if (this.lastMemoryInjection && this.lastMemoryInjection.systemPromptBlock) {
+            this._cachedMemoryBlock = this.lastMemoryInjection.systemPromptBlock;
+            logger.info(`[Agent] 记忆块已缓存（将由 PromptAssembler 以 user 角色注入）: ${this._cachedMemoryBlock.length} 字`);
+        }
+        logger.info('[Agent] Step 6/7: System message 已设置（via PromptRegistry）');
+        // Step 7: 模型上线探测
+        logger.info('[Agent] Step 7/7: 模型上线探测...');
+        const modelT0 = Date.now();
+        const onboardResult = await this.onboardModel();
+        logger.info(`[Agent] 模型探测完成 (${Date.now() - modelT0}ms): ${onboardResult.replace(/\n/g, ' | ')}`);
+        // 初始化完成汇总
+        const recovery = this.projectManager.recoverySummary();
+        const ckptRecovery = this.checkpointMgr.recoverySummary();
+        const skillsMsg = '\nSKILL: ' + this.registry.size + ' loaded';
+        let base = recovery ? onboardResult + skillsMsg + '\n\n' + recovery : onboardResult + skillsMsg;
+        if (ckptRecovery !== 'No pending recovery tasks')
+            base += '\n\n' + ckptRecovery;
+        // 会话诊断 + 胡话检测：同步模型名 + 启动 10s 全程监控（必须在心跳之前）
+        this.sessionDiag.setModelName(this.adapter.model);
+        this.nonsenseDetector.setModelName(this.adapter.model);
+        this.nonsenseDetector.startMonitor();
+        // 注册诊断探活定时任务
+        this.registerDiagnosticPingTask();
+        // Phase 5: 启动韧性心跳（必须在 nonsenseDetector 和诊断任务注册之后）
+        this.orchestrator.startHeartbeat();
+        
+        // Phase 1 重构：创建命令处理器
+        this.commandHandler = createCommandHandlerFromAgentCore(this);
+        logger.info('[Agent] 命令处理器已初始化');
+        
+        const totalTime = Date.now() - initStart;
+        logger.info(`[Agent] ====== 初始化完成 (${totalTime}ms) ======`);
+        logger.info(`Agent core (Phase 5: router+skills+multi-agent+resilience+heartbeat)`);
+        return base;
+    }
+    /** 构造 agent.identity 模板的动态变量字典 */
+    getIdentityVars(): Record<string, string> {
+        const activeProject = this.projectManager?.getActiveProject();
+        return {
+            cwd: process.cwd(),
+            activeProject: activeProject ? activeProject.project : '(none)',
+            modelName: this.adapter?.model || 'unknown',
+        };
+    }
+    onboardModel = async () => {
+        logger.info('[Agent] → 查询 LM Studio 当前加载模型...');
+        const modelName = await this.adapter.getCurrentModel();
+        logger.info(`[Agent] → LM Studio 模型: ${modelName} (context=${this.adapter.contextLength || '?'})`);
+        const profileStore = model_profile_1.getProfileStore();
+        const profile = profileStore.get(modelName);
+        if (profile && profile.capability && profile.stage === 'stable') {
+            this.modelOnboarded = true;
+            const msg = `MODEL: ${modelName} (stable, ${(profile.capability.overallScore * 100).toFixed(0)}%)`;
+            logger.info(`[Agent] → ${msg}，跳过探测`);
+            return msg;
+        }
+        logger.info(`[Agent] → 开始能力探测 (profile=${profile ? 'exist:' + profile.stage : 'none'})`);
+        this.adapter.setProbeMode(true); // 探针模式：禁用重复检测
+        try {
+            const t0 = Date.now();
+            const capability = await this.breakIn.onboard(this.adapter.asChatFn());
+            this.modelOnboarded = true;
+            const elapsed = Date.now() - t0;
+            const warnings = capability.warnings.length ? '\nWARN: ' + capability.warnings.join('; ') : '';
+            const msg = `PROBED: ${modelName} (${elapsed}ms)\n  Score: ${(capability.overallScore * 100).toFixed(0)}%` + warnings;
+            logger.info(`[Agent] → 探测完成: ${(capability.overallScore * 100).toFixed(0)}% (${elapsed}ms)`);
+            // 同步 BreakInMachine 中实际模型名（可能 probe 返回与 config 不一致）
+            this.breakIn.setModelName(modelName);
+            return msg;
+        }
+        catch (err) {
+            logger.error(`[Agent] → 探测失败: ${err}`);
+            return 'PROBE FAILED: ' + modelName;
+        }
+        finally {
+            // 无论成功/失败，确保退出探针模式
+            this.adapter.setProbeMode(false);
+        }
+    };
+    async sendMessage(userInput) {
+        this.messages.push({ role: 'user', content: userInput });
+        logger.info('User: ' + userInput.slice(0, 80));
+        // 事件总线：开始 pipeline
+        agentEventBus.startSession(3);
+        // 快速通道：/ 开头的命令跳过 LLM 意图解析
+        if (userInput.startsWith('/')) {
+            const reply = await this.handleCommand(userInput);
+            this.messages.push({ role: 'assistant', content: reply });
+            agentEventBus.endSession(true, '命令完成');
+            return reply;
+        }
+        // 注意：/ 命令快速通道不走 recordInteraction / audit / breakIn 评估
+        // 这是设计使然 — 简单查询不需要写入记忆系统。
+        let intent;
+        try {
+            intent = await this.intentParser.parse(userInput);
+        }
+        catch {
+            intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.3, needsClarification: false, missingInfo: [] };
+        }
+        // 事件总线：意图已确定
+        agentEventBus.stepDone(1, 'intent_ready', '意图: ' + (intent.type || 'unknown'));
+        if (intent.needsClarification && intent.missingInfo.length > 0) {
+            const msg = 'Not enough info:\n' + intent.missingInfo.map((i) => '  - ' + i).join('\n');
+            this.messages.push({ role: 'assistant', content: msg });
+            this.recordInteraction(userInput, msg);
+            agentEventBus.endSession(true, '需要澄清');
+            return msg;
+        }
+        let reply;
+        const start = Date.now();
+        switch (intent.type) {
+            case 'command':
+                reply = await this.handleCommand(userInput);
+                break;
+            case 'task':
+                reply = await this.handleTask(intent, userInput);
+                break;
+            default:
+                reply = await this.handleChat(userInput);
+                break;
+        }
+        const duration = Date.now() - start;
+        this.messages.push({ role: 'assistant', content: reply });
+        this.recordInteraction(userInput, reply);
+        const isError = reply.startsWith('ERR') || reply.startsWith('WARN');
+        this.breakIn.evaluateInteraction({
+            taskType: intent.type, success: !isError, durationMs: duration, toolCalls: intent.type === 'task' ? 2 : 0, toolErrors: isError ? 1 : 0,
+        });
+        this.checkPendingApplies();
+        // 审计: 记录交互
+        this.auditLog.logDecision(intent.type, reply.slice(0, 200), isError ? 'failure' : 'success', { durationMs: duration, inputLength: userInput.length });
+        // 事件总线：完成
+        agentEventBus.endSession(!isError, isError ? '处理出错' : undefined);
+        // Experience module: 异步提取经验（不阻塞响应）
+        if (this.experienceInitialized && intent.type !== 'command') {
+            const outcome = isError ? 'failure' : 'success';
+            this.experienceExtractor.extract(userInput, reply, outcome, this.sessionId, {
+                modelUsed: this.adapter.model,
+            }).then(id => {
+                if (id !== null) {
+                    logger.debug(`[Agent] 经验已提取: #${id}`);
+                }
+            }).catch(err => {
+                logger.debug('[Agent] 经验提取失败（非阻塞）', err);
+            });
+        }
+        return reply;
+    }
+    async handleChat(userInput) {
+        this.nonsenseDetector.markConversationStart(userInput);
+        let chatOutput = '';
+        let chatError = null;
+        try {
+            const result = await this.recovery.executeProtected(async () => {
+                const alive = await this.adapter.ping();
+                this.sessionDiag.recordPing(alive);
+                if (!alive) {
+                    this.healthMon.recordPing(false);
+                    throw new Error('model_unreachable');
+                }
+                this.healthMon.recordPing(true);
+                this.healthMon.watchTokenStream();
+                // P7: 动态上下文窗口 — 从模型实际 context_length 算有效预算
+                try {
+                    const effectiveWindow = this.adapter.getEffectiveContextWindow();
+                    this.ctxManager.updateConfig({ maxTokens: effectiveWindow });
+                }
+                catch { /* adapter 不支持时忽略 */ }
+                // P7: 上下文管理 — 压缩后发送
+                const ctxResult = await this.ctxManager.process(this.messages, userInput, async (prompt) => {
+                    // 事件总线：模型开始响应
+                    agentEventBus.modelResponding(this.adapter.model);
+                    // LLM Router 统一调用：自动广播 payload
+                    const summarizeMsgs = [{ role: 'user' as const, content: prompt }];
+                    const resp = await llm_router_1.getLLMRouter().call({
+                        taskType: 'summarize',
+                        messages: summarizeMsgs,
+                    });
+                    return resp.choices?.[0]?.message?.content || '';
+                });
+                if (ctxResult.compressed) {
+                    logger.info(`[Agent] 上下文压缩: ${ctxResult.originalTokens} → ${ctxResult.finalTokens} tokens` +
+                        `, ${ctxResult.hotCount} 条热点, 层级 ${ctxResult.compressionLevel}` +
+                        (ctxResult.sessionReset ? ', ⚠️ 会话边界 — 开启新会话' : ''));
+                    this.auditLog.logDegradation(ctxResult.compressionLevel, `context compressed: ${ctxResult.originalTokens}→${ctxResult.finalTokens}` +
+                        (ctxResult.sessionReset ? ' [new session]' : ''), 'compressed', 'attention');
+                    // 会话边界：通知适配器下次请求开启新会话
+                    if (ctxResult.sessionReset) {
+                        try {
+                            this.adapter.markSessionReset();
+                        }
+                        catch {
+                            // stateless API 忽略
+                        }
+                    }
+                }
+                try {
+                    // 事件总线：模型开始响应
+                    agentEventBus.modelResponding(this.adapter.model);
+                    // Phase 3: 使用 PromptAssembler 组装最终 messages
+                    // ContextManager 已处理压缩，ctxResult.messages 包含处理后的上下文
+                    // Experience module: 检索相关经验（条件性注入）
+                    let experienceBlock: string | undefined;
+                    if (this.experienceInitialized) {
+                        try {
+                            const expResults = this.experienceRetriever.retrieve(userInput, { topK: 3 });
+                            if (expResults.length > 0) {
+                                experienceBlock = this.experienceRetriever.formatBlock(expResults);
+                            }
+                        }
+                        catch (err) {
+                            logger.debug('[Agent] 经验检索失败（非阻塞）', err);
+                        }
+                    }
+                    const assembled = this.promptAssembler.assemble({
+                        identityTemplateId: 'agent.identity',
+                        identityVars: this.getIdentityVars(),
+                        memoryBlock: this._cachedMemoryBlock || undefined,
+                        experienceBlock: experienceBlock,
+                        context: ctxResult.messages,
+                        userInput: undefined, // userInput 已在 ctxResult.messages 末尾
+                    });
+                    logger.debug(
+                        `[Agent] PromptAssembler: ${assembled.metadata.totalMessages} 条消息` +
+                        ` hasMemory=${assembled.metadata.hasMemory}` +
+                        ` hasExperience=${assembled.metadata.hasExperience}` +
+                        ` hasSummary=${assembled.metadata.hasSummary}`,
+                    );
+                    // LLM Router 统一调用：自动广播 payload（附加组装元数据）
+                    const response = await llm_router_1.getLLMRouter().call({
+                        taskType: 'chat',
+                        messages: assembled.messages,
+                        metadata: { assembler: assembled.metadata },
+                    });
+                    return response.choices?.[0]?.message?.content ?? '(empty)';
+                }
+                finally {
+                    this.healthMon.endTokenStream();
+                }
+            }, { taskId: 'chat-' + Date.now() });
+            chatOutput = this.formatRecoveryResult(result);
+        }
+        catch (err) {
+            chatOutput = `ERR: ${err.message || 'unknown error'}`;
+            chatError = err.message || 'unknown error';
+        }
+        // 胡话检测
+        const reason = nonsense_detector_1.NonsenseDetector.detectGibberish(chatOutput);
+        const normal = !reason && !chatError;
+        this.nonsenseDetector.markConversationEnd(normal, userInput, chatOutput, reason || chatError || undefined);
+        if (!normal) {
+            logger.warn(`[Nonsense] handleChat 检测到异常: ${reason || chatError}`);
+        }
+        return chatOutput;
+    }
+    /**
+     * 流式发送消息 — 与 sendMessage() 相同的 pipeline，但聊天路径使用流式输出
+     * 逐 chunk 通过 agentEventBus.emitChatChunk() 广播
+     * 返回完整回复字符串
+     */
+    async sendMessageStream(userInput) {
+        this.messages.push({ role: 'user', content: userInput });
+        logger.info('User (stream): ' + userInput.slice(0, 80));
+        // 事件总线：开始 pipeline
+        agentEventBus.startSession(3);
+        // 快速通道：/ 开头的命令跳过 LLM 意图解析（非流式）
+        if (userInput.startsWith('/')) {
+            const reply = await this.handleCommand(userInput);
+            this.messages.push({ role: 'assistant', content: reply });
+            agentEventBus.endSession(true, '命令完成');
+            return reply;
+        }
+        let intent;
+        try {
+            intent = await this.intentParser.parse(userInput);
+        }
+        catch {
+            intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.3, needsClarification: false, missingInfo: [] };
+        }
+        agentEventBus.stepDone(1, 'intent_ready', '意图: ' + (intent.type || 'unknown'));
+        if (intent.needsClarification && intent.missingInfo.length > 0) {
+            const msg = 'Not enough info:\n' + intent.missingInfo.map((i) => '  - ' + i).join('\n');
+            this.messages.push({ role: 'assistant', content: msg });
+            this.recordInteraction(userInput, msg);
+            agentEventBus.endSession(true, '需要澄清');
+            return msg;
+        }
+        let reply;
+        const t0 = Date.now();
+        switch (intent.type) {
+            case 'command':
+                reply = await this.handleCommand(userInput);
+                break;
+            case 'task':
+                reply = await this.handleTask(intent, userInput);
+                break;
+            default:
+                reply = await this.handleChatStream(userInput);
+                break;
+        }
+        const duration = Date.now() - t0;
+        this.messages.push({ role: 'assistant', content: reply });
+        this.recordInteraction(userInput, reply);
+        const isError = reply.startsWith('ERR') || reply.startsWith('WARN');
+        this.breakIn.evaluateInteraction({
+            taskType: intent.type, success: !isError, durationMs: duration, toolCalls: intent.type === 'task' ? 2 : 0, toolErrors: isError ? 1 : 0,
+        });
+        this.checkPendingApplies();
+        this.auditLog.logDecision(intent.type, reply.slice(0, 200), isError ? 'failure' : 'success', { durationMs: duration, inputLength: userInput.length });
+        agentEventBus.endSession(!isError, isError ? '处理出错' : undefined);
+        // Experience module: 异步提取经验
+        if (this.experienceInitialized && intent.type !== 'command') {
+            const outcome = isError ? 'failure' : 'success';
+            this.experienceExtractor.extract(userInput, reply, outcome, this.sessionId, {
+                modelUsed: this.adapter.model,
+            }).then(id => {
+                if (id !== null)
+                    logger.debug(`[Agent] 经验已提取: #${id}`);
+            }).catch(err => {
+                logger.debug('[Agent] 经验提取失败（非阻塞）', err);
+            });
+        }
+        return reply;
+    }
+    /**
+     * 流式聊天处理 — 与 handleChat() 相同逻辑，但使用 llmRouter.callStream()
+     * 逐 chunk 通过 agentEventBus.emitChatChunk() 广播
+     */
+    async handleChatStream(userInput) {
+        this.nonsenseDetector.markConversationStart(userInput);
+        let chatOutput = '';
+        let chatError = null;
+        const streamStartTime = Date.now();
+        try {
+            chatOutput = await this.recovery.executeProtected(async () => {
+                const alive = await this.adapter.ping();
+                this.sessionDiag.recordPing(alive);
+                if (!alive) {
+                    this.healthMon.recordPing(false);
+                    throw new Error('model_unreachable');
+                }
+                this.healthMon.recordPing(true);
+                this.healthMon.watchTokenStream();
+                try {
+                    const effectiveWindow = this.adapter.getEffectiveContextWindow();
+                    this.ctxManager.updateConfig({ maxTokens: effectiveWindow });
+                }
+                catch { }
+                const ctxResult = await this.ctxManager.process(this.messages, userInput, async (prompt) => {
+                    agentEventBus.modelResponding(this.adapter.model);
+                    const summarizeMsgs = [{ role: 'user', content: prompt }];
+                    const resp = await llm_router_1.getLLMRouter().call({
+                        taskType: 'summarize',
+                        messages: summarizeMsgs,
+                    });
+                    return resp.choices?.[0]?.message?.content || '';
+                });
+                if (ctxResult.compressed) {
+                    logger.info(`[Agent] 上下文压缩: ${ctxResult.originalTokens} → ${ctxResult.finalTokens} tokens`);
+                    if (ctxResult.sessionReset) {
+                        try {
+                            this.adapter.markSessionReset();
+                        }
+                        catch { }
+                    }
+                }
+                try {
+                    agentEventBus.modelResponding(this.adapter.model);
+                    // Phase 3: 使用 PromptAssembler 组装最终 messages
+                    let experienceBlock;
+                    if (this.experienceInitialized) {
+                        try {
+                            const expResults = this.experienceRetriever.retrieve(userInput, { topK: 3 });
+                            if (expResults.length > 0) {
+                                experienceBlock = this.experienceRetriever.formatBlock(expResults);
+                            }
+                        }
+                        catch (err) {
+                            logger.debug('[Agent] 经验检索失败（非阻塞）', err);
+                        }
+                    }
+                    const assembled = this.promptAssembler.assemble({
+                        identityTemplateId: 'agent.identity',
+                        identityVars: this.getIdentityVars(),
+                        memoryBlock: this._cachedMemoryBlock || undefined,
+                        experienceBlock: experienceBlock,
+                        context: ctxResult.messages,
+                        userInput: undefined,
+                    });
+                    logger.debug(`[Agent][stream] PromptAssembler: ${assembled.metadata.totalMessages} 条消息`);
+                    // 流式调用 LLM Router
+                    let fullReply = '';
+                    try {
+                        for await (const chunk of llm_router_1.getLLMRouter().callStream({
+                            taskType: 'chat',
+                            messages: assembled.messages,
+                            metadata: { assembler: assembled.metadata },
+                        })) {
+                            fullReply += chunk;
+                            agentEventBus.emitChatChunk(chunk);
+                        }
+                    }
+                    catch (streamErr) {
+                        // 流式中断：如果有部分内容，保留并标记
+                        if (fullReply.length > 0) {
+                            logger.warn(`[Agent][stream] 流式中断，保留已有内容 (${fullReply.length}字): ${streamErr}`);
+                            agentEventBus.emitChatError(streamErr.message || 'stream interrupted');
+                        }
+                        else {
+                            throw streamErr;
+                        }
+                    }
+                    const duration = Date.now() - streamStartTime;
+                    agentEventBus.emitChatDone(fullReply, duration);
+                    return fullReply || '(empty)';
+                }
+                finally {
+                    this.healthMon.endTokenStream();
+                }
+            }, { taskId: 'chat-stream-' + Date.now() });
+            chatOutput = this.formatRecoveryResult(chatOutput);
+        }
+        catch (err) {
+            chatOutput = `ERR: ${err.message || 'unknown error'}`;
+            chatError = err.message || 'unknown error';
+            agentEventBus.emitChatError(chatError);
+        }
+        const reason = nonsense_detector_1.NonsenseDetector.detectGibberish(chatOutput);
+        const normal = !reason && !chatError;
+        this.nonsenseDetector.markConversationEnd(normal, userInput, chatOutput, reason || chatError || undefined);
+        if (!normal) {
+            logger.warn(`[Nonsense] handleChatStream 检测到异常: ${reason || chatError}`);
+        }
+        return chatOutput;
+    }
+    async handleTask(intent, rawMessage) {
+        this.nonsenseDetector.markConversationStart(rawMessage);
+        let taskOutput = '';
+        let taskError = null;
+        try {
+            const alive = await this.adapter.ping();
+            this.sessionDiag.recordPing(alive);
+            if (!alive) {
+                this.healthMon.recordPing(false);
+                this.sessionDiag.recordCircuitBreaker(this.adapter.model, 'LM Studio 不可达 (handleTask)');
+                taskOutput = 'WARN: LM Studio not connected.';
+                taskError = 'model_unreachable';
+                this.nonsenseDetector.markConversationEnd(false, rawMessage, taskOutput, taskError);
+                return taskOutput;
+            }
+            if (this.isMultiAgentTask(rawMessage)) {
+                taskOutput = await this.handleMultiAgentTask(intent, rawMessage);
+                this.nonsenseDetector.markConversationEnd(true, rawMessage, taskOutput);
+                return taskOutput;
+            }
+            const active = this.projectManager.getActiveProject();
+            const summary = intent.summary || rawMessage.slice(0, 50);
+            if (!active) {
+                const name = this.sanitizeProjectName(summary || 'new-project');
+                this.projectManager.createProject(name, { description: rawMessage.slice(0, 200), priority: 'P1' });
+                this.projectManager.addTodo(name, { title: summary, status: 'in_progress', priority: 'P1' });
+            }
+            else {
+                this.projectManager.addTodo(active.project, { title: summary, status: 'in_progress', priority: intent.confidence > 0.8 ? 'P0' : 'P1' });
+            }
+            // Phase 5: 韧性保护执行
+            const taskId = 'task-' + Date.now();
+            // 事件总线：执行工具中
+            agentEventBus.toolsExecuting(['orchestrator']);
+            const result = await this.recovery.executeProtected(async () => {
+                this.healthMon.watchTokenStream();
+                try {
+                    const output = await this.orchestrator.execute(intent, rawMessage);
+                    const proj = this.projectManager.getActiveProject();
+                    if (proj)
+                        this.projectManager.recalculateProgress(proj.project);
+                    return output;
+                }
+                finally {
+                    this.healthMon.endTokenStream();
+                }
+            }, { taskId, context: { model: this.adapter.model } });
+            taskOutput = this.formatRecoveryResult(result);
+        }
+        catch (err) {
+            taskOutput = `ERR: ${err.message || 'unknown error'}`;
+            taskError = err.message || 'unknown error';
+        }
+        // 胡话检测
+        const reason = nonsense_detector_1.NonsenseDetector.detectGibberish(taskOutput);
+        const normal = !reason && !taskError;
+        this.nonsenseDetector.markConversationEnd(normal, rawMessage, taskOutput, reason || taskError || undefined);
+        if (!normal) {
+            logger.warn(`[Nonsense] handleTask 检测到异常: ${reason || taskError}`);
+        }
+        return taskOutput;
+    }
+    isMultiAgentTask(input) {
+        const keywords = ['同时', '并行', '分别', '多个', '团队', '协作', '分工'];
+        return keywords.some(k => input.includes(k));
+    }
+    async handleMultiAgentTask(intent, rawMessage) {
+        logger.info('[Agent] multi-agent: ' + rawMessage.slice(0, 60));
+        const agents = new Map();
+        agents.set('frontend', new sub_agent_1.SubAgent({ name: 'Frontend', systemPrompt: 'Frontend engineer. HTML/CSS/JS/React. Reply with code.' }));
+        agents.set('backend', new sub_agent_1.SubAgent({ name: 'Backend', systemPrompt: 'Backend engineer. API/DB/server. Reply with code.' }));
+        agents.set('reviewer', new sub_agent_1.SubAgent({ name: 'Reviewer', systemPrompt: 'Code reviewer. Check quality and security.' }));
+        const tasks = [
+            { id: 'fe', description: 'Frontend: ' + rawMessage, agentName: 'frontend', priority: 1 },
+            { id: 'be', description: 'Backend: ' + rawMessage, agentName: 'backend', priority: 1 },
+            { id: 'review', description: 'Review both, suggest improvements', agentName: 'reviewer', priority: 2, dependsOn: ['fe', 'be'] },
+        ];
+        const result = await this.scheduler.parallel(tasks, agents);
+        return 'multi-agent done (' + result.mode + ', ' + result.totalDurationMs + 'ms)\n' + result.merged.summary;
+    }
+    async handleCommand(input) {
+        // Phase 1 重构：委托给 AgentCommandHandler
+        if (!this.commandHandler) {
+            logger.warn('[Agent] commandHandler not initialized');
+            return 'Error: command handler not ready';
+        }
+        
+        const result = await this.commandHandler.handle(input);
+        
+        // 特殊处理：退出命令
+        if (result === 'EXIT_REQUESTED') {
+            this.stop();
+            return 'Goodbye!';
+        }
+        
+        return result;
+    }
+    // ====== Phase 3: 技能命令 ======
+    handleSkillsCommand(args) {
+        const sub = args[0] || 'list';
+        switch (sub) {
+            case 'list': {
+                const skills = this.registry.list();
+                return skills.length ? 'Skills:\n' + skills.join('\n') : 'No skills';
+            }
+            case 'gaps': {
+                const gaps = this.gapDetector.listGaps();
+                if (gaps.length === 0)
+                    return 'No gaps';
+                return 'Gaps:\n' + gaps.map(g => '  - ' + g.ctx.needed + ' (' + g.count + 'x)').join('\n');
+            }
+            case 'apply': {
+                const needed = args[1];
+                if (!needed)
+                    return 'Usage: /skills apply <name>';
+                const apply = this.gapDetector.generateApplication(needed);
+                if (!apply)
+                    return 'Need 2+ triggers';
+                this.pendingApplies.push(apply);
+                return 'Apply: ' + apply.name + ' (' + apply.status + ')';
+            }
+            case 'audit': {
+                if (this.pendingApplies.length === 0)
+                    return 'No pending';
+                const results = this.pendingApplies.map(a => {
+                    const r = this.auditor.audit(a);
+                    return '  ' + (r.approved ? 'OK' : r.needsHumanReview ? 'REVIEW' : 'NO') + ' ' + a.name;
+                });
+                return 'Audit:\n' + results.join('\n');
+            }
+            case 'process': {
+                const r = this.processPending();
+                return r || 'Nothing to process';
+            }
+            default: return 'Skills: /skills list|gaps|apply|audit|process';
+        }
+    }
+    // ====== Phase 4: 多Agent命令 ======
+    handleAgentsCommand(args) {
+        const sub = args[0] || 'status';
+        switch (sub) {
+            case 'status':
+                return 'Agents: ' + this.subAgents.size + ' registered';
+            case 'new': {
+                const name = args[1] || 'worker';
+                this.subAgents.set(name, new sub_agent_1.SubAgent({ name, systemPrompt: 'Assistant ' + name }));
+                return 'Created: ' + name;
+            }
+            default: return 'Agents: /agents status|new';
+        }
+    }
+    // ====== Phase 5 P1: 审计命令 ======
+    handleAuditCommand(args) {
+        const sub = args[0] || 'summary';
+        switch (sub) {
+            case 'summary': return this.auditLog.getSessionSummary();
+            case 'recent': {
+                const events = this.auditLog.query({ limit: 20 });
+                if (events.length === 0)
+                    return 'No audit events';
+                return 'Recent (' + events.length + '):\n' + events.map(e => '  [' + e.timestamp.slice(11, 19) + '] ' + e.category + '/' + e.action + ' → ' + e.result).join('\n');
+            }
+            case 'errors': {
+                const errors = this.auditLog.query({ category: 'error', limit: 10 });
+                if (errors.length === 0)
+                    return 'No errors';
+                return 'Errors (' + errors.length + '):\n' + errors.map(e => '  [' + e.timestamp.slice(11, 19) + '] ' + e.target + ': ' + (e.meta.errorMessage ?? '?')).join('\n');
+            }
+            case 'search': {
+                const kw = args[1];
+                if (!kw)
+                    return 'Usage: /audit search <keyword>';
+                const found = this.auditLog.query({ keyword: kw, limit: 10 });
+                if (found.length === 0)
+                    return 'No matches for: ' + kw;
+                return 'Matches (' + found.length + '):\n' + found.map(e => '  [' + e.timestamp.slice(11, 19) + '] ' + e.category + ': ' + e.action).join('\n');
+            }
+            default: return 'Audit: /audit summary|recent|errors|search';
+        }
+    }
+    // ====== P2: 记忆摘要命令 ======
+    async handleSummarizeCommand(args) {
+        const sub = args[0] || 'now';
+        switch (sub) {
+            case 'now': {
+                const userMsgs = this.messages.filter(m => m.role === 'user');
+                if (userMsgs.length < 3)
+                    return 'Not enough messages to summarize (need >= 3)';
+                try {
+                    const output = await this.summarizer.summarizeSession(this.sessionId, this.messages.filter(m => m.role !== 'system'), []);
+                    let report = '📋 Summary for ' + this.sessionId.slice(0, 12) + ':\n';
+                    report += '  ' + output.sessionSummary + '\n';
+                    if (output.keyDecisions.length > 0) {
+                        report += 'Key decisions (' + output.keyDecisions.length + '):\n';
+                        output.keyDecisions.forEach(d => report += '  [' + d.category + '] ' + d.summary + '\n');
+                    }
+                    if (output.learnedFacts.length > 0) {
+                        report += 'Facts learned (' + output.learnedFacts.length + '):\n';
+                        output.learnedFacts.forEach(f => report += '  ✅ ' + f + '\n');
+                    }
+                    if (output.tags.length > 0)
+                        report += 'Tags: ' + output.tags.join(', ') + '\n';
+                    if (output.nextSteps.length > 0)
+                        report += 'Next: ' + output.nextSteps.join('; ');
+                    return report;
+                }
+                catch (err) {
+                    return 'Summarization failed: ' + err.message;
+                }
+            }
+            case 'list': {
+                const summaries = this.summarizer.getSummaries(this.sessionId);
+                if (summaries.length === 0)
+                    return 'No summaries yet';
+                return 'Summaries (' + summaries.length + '):\n' + summaries.map(s => '  [' + s.timestamp.slice(0, 16) + '] ' + s.content.slice(0, 100)).join('\n');
+            }
+            case 'recent': {
+                const recent = this.summarizer.getRecentSummaries(5);
+                if (recent.length === 0)
+                    return 'No recent summaries';
+                return 'Recent (' + recent.length + '):\n' + recent.map(r => '  [' + r.timestamp.slice(0, 16) + '] ' + r.content.slice(0, 100)).join('\n');
+            }
+            case 'patrol': {
+                const patrol = await this.summarizer.patrolSummary(this.sessionId, this.messages);
+                return patrol || 'Below patrol threshold (' + this.messages.length + ' msgs)';
+            }
+            default: return 'Summarize: /summarize now|list|recent|patrol';
+        }
+    }
+    // ====== Phase 5 P1: 跨会话记忆命令 ======
+    handleMemoryCommand(args) {
+        const sub = args[0] || 'status';
+        switch (sub) {
+            case 'status': {
+                if (!this.lastMemoryInjection)
+                    return 'No memory loaded';
+                const mi = this.lastMemoryInjection;
+                let s = 'Memory status:\n';
+                s += '  Decisions: ' + mi.recentDecisions.length + '\n';
+                s += '  Entities: ' + mi.trackedEntities.length + '\n';
+                s += '  Summaries: ' + mi.recentSummaries.length + '\n';
+                s += '  File mem: ' + (mi.recentFileMemory.length > 0 ? mi.recentFileMemory.length + ' chars' : 'none') + '\n';
+                // 文件记忆存储统计
+                try {
+                    const store = file_store_1.getMemoryStore();
+                    const stats = store.getStats();
+                    s += '  File store: ' + stats.fileCount + ' files, ' + (stats.totalBytes / 1024).toFixed(1) + ' KB';
+                    if (stats.oldestFile)
+                        s += ' (oldest: ' + stats.oldestFile + ')';
+                }
+                catch { }
+                // DB 统计
+                try {
+                    const dbStats = db_store_1.getDBStore().getStats();
+                    s += '\n  DB: ' + dbStats.replace(/\n/g, ', ');
+                }
+                catch { }
+                return s;
+            }
+            case 'decisions': {
+                if (!this.lastMemoryInjection || this.lastMemoryInjection.recentDecisions.length === 0)
+                    return 'No recent decisions';
+                return 'Recent decisions:\n' + this.lastMemoryInjection.recentDecisions.map(d => '  [' + d.timestamp.slice(0, 16) + '] ' + d.category + ': ' + d.summary).join('\n');
+            }
+            case 'entities': {
+                if (!this.lastMemoryInjection || this.lastMemoryInjection.trackedEntities.length === 0)
+                    return 'No tracked entities';
+                return 'Tracked entities:\n' + this.lastMemoryInjection.trackedEntities.map(e => '  ' + e.type + ': ' + e.name + ' (' + e.mention_count + 'x)').join('\n');
+            }
+            case 'reload': {
+                try {
+                    this.lastMemoryInjection = this.sessionRecoverer.recover();
+                    if (this.lastMemoryInjection.systemPromptBlock) {
+                        const sysMsg = this.messages[0];
+                        const base = 'You are an intelligent Agent assistant. Reply concisely and directly.';
+                        this.messages[0] = {
+                            role: 'system',
+                            content: base + '\n\n[CONTEXT FROM PAST SESSIONS]\n' + this.lastMemoryInjection.systemPromptBlock,
+                        };
+                    }
+                    return 'Memory reloaded: ' + this.lastMemoryInjection.recentDecisions.length + ' decisions, ' + this.lastMemoryInjection.trackedEntities.length + ' entities';
+                }
+                catch (err) {
+                    return 'Memory reload failed';
+                }
+            }
+            default: return 'Memory: /memory status|decisions|entities|reload';
+        }
+    }
+    // ====== P7: 上下文管理命令 ======
+    handleContextCommand(args) {
+        const stats = this.ctxManager.getStats();
+        const lines = [
+            '=== Context Manager ===',
+            `压缩层级: ${stats.compressionLevel}`,
+            `触发次数: ${stats.compressionCount}`,
+            `压缩块数: ${stats.compressedBlocks}`,
+            `累积摘要: ~${stats.accumulatedSummary} tokens`,
+            `当前消息数: ${this.messages.length}`,
+            `配置: maxTokens=${stats.config.maxTokens}, hotWindow=${stats.config.hotWindowSize}`,
+            `注意力评分: ${stats.config.attentionEnabled ? '开启' : '关闭'}`,
+            `触发阈值: ${(stats.config.compressionThreshold * 100)}%`,
+            `摘要预算: ${stats.config.summaryTokenBudget} tokens`,
+        ];
+        // 从适配器获取模型实际上下文窗口
+        try {
+            const effectiveWindow = this.adapter.getEffectiveContextWindow();
+            const sessionReset = this.adapter.isSessionReset();
+            lines.push(`模型有效窗口: ${effectiveWindow} tokens`);
+            lines.push(`会话边界: ${sessionReset ? '⚠️ 待开启新会话' : '正常续聊'}`);
+        }
+        catch {
+            // ignore
+        }
+        if (args[0] === 'reset') {
+            this.ctxManager.reset();
+            lines.push('');
+            lines.push('[✅ 上下文状态已重置]');
+        }
+        if (args[0] === 'blocks') {
+            const blocks = this.ctxManager.getStats().compressedBlocks;
+            if (!blocks) {
+                lines.push('暂无压缩块');
+            }
+        }
+        return lines.join('\n');
+    }
+    handleIdleCommand(args) {
+        const sub = args[0] || 'status';
+        switch (sub) {
+            case 'status': {
+                const stats = this.idleTaskMgr.getStats();
+                const pending = this.idleTaskMgr.getPendingTasks();
+                const lines = [
+                    '=== Idle Task Manager ===',
+                    `已执行: ${stats.executed} (成功 ${stats.succeeded} / 失败 ${stats.failed} / 跳过 ${stats.skipped})`,
+                    `待处理: ${stats.pending}`
+                ];
+                if (pending.length > 0) {
+                    lines.push('', '队列:');
+                    pending.forEach((t) => lines.push(`  [${t.priority}] ${t.name}: ${t.description}`));
+                }
+                return lines.join('\n');
+            }
+            case 'pending': {
+                const pending = this.idleTaskMgr.getPendingTasks();
+                if (pending.length === 0)
+                    return '暂无待处理空闲任务';
+                return '空闲任务队列:\n' + pending.map((t) => `  [${t.priority}] ${t.name} — ${t.description}`).join('\n');
+            }
+            case 'log': {
+                const count = parseInt(args[1], 10) || 10;
+                const logs = this.idleTaskMgr.getRecentLogs(count);
+                if (logs.length === 0)
+                    return '暂无空闲任务日志';
+                return '最近 ' + logs.length + ' 条空闲任务日志:\n' + logs.map((l) => `  [${l.priority}] ${l.taskName}: ${l.success ? '✅' : '❌'} ${l.durationMs}ms — ${l.result}`).join('\n');
+            }
+            case 'run': {
+                // 立即执行一次空闲任务处理
+                this.idleTaskMgr.processAll().catch(() => { });
+                return '🔄 空闲任务已触发执行';
+            }
+            default: return 'Idle: /idle status|pending|log|run';
+        }
+    }
+    handleDiagCommand(args) {
+        const sub = args[0] || 'status';
+        switch (sub) {
+            case 'status': {
+                const stats = this.sessionDiag.getStats();
+                return [
+                    '=== Session Diagnostics ===',
+                    `快照总数: ${stats.totalSnapshots}`,
+                    `未诊断: ${stats.undiagnosed}`,
+                    `已诊断: ${stats.diagnosed}`,
+                    `诊断报告: ${stats.reports}`,
+                    '存储目录: data/pending-diagnostics/',
+                ].join('\n');
+            }
+            case 'list': {
+                const undiagnosed = this.sessionDiag.getUndiagnosedSnapshots();
+                if (undiagnosed.length === 0)
+                    return '暂无待诊断快照';
+                return '待诊断:\n' + undiagnosed.map((s) => `  #${s.id.slice(-8)} [${s.trigger}] ${s.error.slice(0, 60)} at ${s.timestamp.slice(11, 19)}`).join('\n');
+            }
+            case 'reports': {
+                const reports = this.sessionDiag.getReportPaths();
+                if (reports.length === 0)
+                    return '暂无诊断报告';
+                return '诊断报告:\n' + reports.join('\n');
+            }
+            case 'force': {
+                // 手动触发诊断
+                this.sessionDiag.recordManual('手动触发: ' + (args.slice(1).join(' ') || '诊断测试'), this.messages.slice(-3).map(m => ({ role: m.role, content: m.content.slice(0, 200), length: m.content.length })));
+                return '🩺 诊断任务已注册 (P0)，下次心跳时自动处理';
+            }
+            default: return 'Diag: /diag status|list|reports|force <reason>';
+        }
+    }
+    handleModelsCommand(args) {
+        const sub = args[0] || 'list';
+        const profileStore = model_profile_1.getProfileStore();
+        switch (sub) {
+            case 'list': {
+                const names = profileStore.listModels();
+                return 'Models:\n' + names.map(n => '  ' + n).join('\n');
+            }
+            case 'detail': {
+                const name = args[1] || this.adapter.model;
+                const profile = profileStore.get(name);
+                if (!profile)
+                    return 'No profile: ' + name;
+                return 'Model: ' + name + '\n  Stage: ' + profile.stage + '\n  Score: ' + ((profile.capability?.overallScore ?? 0) * 100).toFixed(0) + '%';
+            }
+            default: return 'Models: /models list|detail';
+        }
+    }
+    // ====== Project commands ======
+    handleProjectCommand(args) {
+        const sub = args[0] || 'list';
+        switch (sub) {
+            case 'list': {
+                const metas = this.projectManager.listProjects();
+                return metas.length
+                    ? 'Projects:\n' + metas.map(m => '  ' + (m.active ? '*' : ' ') + ' ' + m.project + ' [' + m.status + '] ' + this.progressBar(m.progress)).join('\n')
+                    : 'No projects';
+            }
+            case 'create': {
+                const name = this.sanitizeProjectName(args.slice(1).join(' ')) || 'project-' + Date.now();
+                this.projectManager.createProject(name, { description: '', priority: 'P1' });
+                return 'Created: ' + name;
+            }
+            case 'switch': {
+                const name = args[1];
+                if (!name)
+                    return 'Usage: /project switch <name>';
+                this.projectManager.setActive(name, false);
+                return 'Switched: ' + name;
+            }
+            case 'status': {
+                const active = this.projectManager.getActiveProject();
+                if (!active)
+                    return 'No active project';
+                return 'Project: ' + active.project + '\n  Status: ' + active.status + '\n  Progress: ' + this.progressBar(active.progress);
+            }
+            default: return 'Project: /project list|create|switch|status';
+        }
+    }
+    // ====== 自动技能管线 ======
+    checkPendingApplies() {
+        if (this.pendingApplies.length === 0)
+            return;
+        for (const apply of this.pendingApplies) {
+            if (apply.status !== 'pending')
+                continue;
+            const result = this.auditor.audit(apply);
+            if (result.approved) {
+                apply.status = 'approved';
+                logger.info('[Skill] approved: ' + apply.name);
+            }
+            else if (!result.needsHumanReview) {
+                apply.status = 'rejected';
+                apply.rejectReason = result.reason;
+            }
+        }
+    }
+    processPending() {
+        const lines = [];
+        const approved = this.pendingApplies.filter(a => a.status === 'approved');
+        if (approved.length === 0 && !this.pendingApplies.some(a => a.status === 'pending'))
+            return null;
+        for (const apply of approved) {
+            apply.status = 'developing';
+            this.developer.develop(apply).then(result => {
+                if (result.success && result.skillMeta) {
+                    const testResult = this.tester.test(result.skillMeta);
+                    if (testResult.passed) {
+                        this.equipper.equip(result.skillMeta);
+                        apply.status = 'complete';
+                        apply.resolvedAt = new Date().toISOString();
+                        lines.push('OK ' + apply.name + ': dev->test->equip');
+                    }
+                    else {
+                        lines.push('FAIL ' + apply.name + ': test - ' + testResult.summary);
+                    }
+                }
+                else {
+                    lines.push('FAIL ' + apply.name + ': dev');
+                }
+            });
+        }
+        return lines.length > 0 ? 'Pipeline:\n' + lines.join('\n') : null;
+    }
+    // ====== Phase 5: 恢复结果格式化 ======
+    formatRecoveryResult(result) {
+        if (result.success) {
+            let output = result.output ?? '';
+            if (result.recovered) {
+                const summary = result.recoveryLog.length > 0 ? result.recoveryLog[result.recoveryLog.length - 1] : 'recovered';
+                output = '[RECOVERED: ' + summary + ']\n\n' + output;
+            }
+            if (result.degraded) {
+                output = '[DEGRADED L' + (result.degradationLevel ?? '?') + ']\n\n' + output;
+            }
+            return output;
+        }
+        if (result.degraded) {
+            return result.output ?? 'Task degraded but failed. Check /resilience.';
+        }
+        return 'ERR: ' + (result.error ?? 'unknown');
+    }
+    // ====== Phase 5: A 型心跳处理 ======
+    onHeartbeat() {
+        const t0 = Date.now();
+        // 1. 处理空闲任务队列（P0 优先，执行日志自动记录）
+        this.idleTaskMgr.processAll().catch((err) => {
+            logger.warn(`[Heartbeat] 空闲任务处理异常: ${err}`);
+        });
+        // 2. 自动审核待处理技能申请
+        this.checkPendingApplies();
+        // 3. 检查活跃项目进度
+        const active = this.projectManager.getActiveProject();
+        if (active) {
+            this.projectManager.recalculateProgress(active.project);
+            if (active.progress > 0 && active.progress < 100) {
+                logger.debug('[Heartbeat] Project ' + active.project + ': ' + this.progressBar(active.progress));
+            }
+        }
+        // 4. 检查熔断器恢复状态
+        const model = this.adapter.model;
+        if (!this.circuitBreaker.canUseModel(model)) {
+            logger.info('[Heartbeat] Circuit breaker OPEN for ' + model);
+        }
+        // 5. 检查待恢复任务
+        const pending = this.checkpointMgr.listPendingTasks();
+        if (pending.length > 0) {
+            logger.info('[Heartbeat] ' + pending.length + ' pending checkpoint tasks');
+        }
+        const elapsed = Date.now() - t0;
+        if (elapsed > 1000) {
+            logger.warn(`[Heartbeat] 处理耗时 ${elapsed}ms (可能影响响应)`);
+        }
+    }
+    /** 注册 P2 级别的周期性诊断探活任务 */
+    registerDiagnosticPingTask() {
+        const idleCfg = agent_system_config_1.getConfigSection('idleTasks');
+        this.idleTaskMgr.register({
+            id: 'periodic-ping-diagnostic',
+            name: '定期探活诊断',
+            description: '周期性检查 LM Studio 连接状态和 Agent 健康状况',
+            priority: 'P2',
+            cooldownMs: idleCfg.defaultCooldownMs,
+            lastRun: 0,
+            running: false,
+            createdAt: Date.now(),
+            failCount: 0,
+            maxFails: idleCfg.defaultMaxFails,
+            execute: async () => {
+                const alive = await this.adapter.ping();
+                this.sessionDiag.recordPing(alive);
+                if (alive) {
+                    const stats = this.idleTaskMgr.getStats();
+                    logger.debug(`[HealthPing] LM Studio OK | 空闲任务: ${stats.pending}待处理, ${stats.executed}已执行`);
+                }
+                return false; // 保留在队列中持续执行
+            },
+        });
+    }
+    // ====== 状态/工具方法 ======
+    buildStatus() {
+        const modelStatus = this.circuitBreaker.canUseModel(this.adapter.model) ? 'OK' : 'BREAKER';
+        const pending = this.checkpointMgr.listPendingTasks();
+        const lines = [
+            'Agent v0.3.0 (Phase 5)', 'Session: ' + this.sessionId.slice(-8),
+            'DB: ' + (this.dbInitialized ? 'OK' : 'file'), 'Model: ' + modelStatus + ' ' + this.adapter.model,
+            'Skills: ' + this.registry.size, 'Agents: ' + this.subAgents.size,
+            'Recovery: ' + (pending.length > 0 ? pending.length + ' pending' : 'OK'),
+            this.orchestrator.getStatus(),
+        ];
+        const active = this.projectManager.getActiveProject();
+        if (active)
+            lines.push('Project: ' + active.project + ' ' + this.progressBar(active.progress));
+        return lines.join('\n');
+    }
+    progressBar(pct) {
+        const filled = Math.round(pct / 10);
+        return '[' + '='.repeat(filled) + ' '.repeat(10 - filled) + '] ' + pct + '%';
+    }
+    sanitizeProjectName(input) {
+        return input.slice(0, 30).replace(/[^a-zA-Z0-9\-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'project';
+    }
+    extractNeededCap(error) {
+        const map = {
+            'command not found': 'shell',
+            'permission denied': 'file access',
+            'no such file': 'file system',
+            'network': 'network',
+            'timeout': 'long task',
+        };
+        for (const [k, v] of Object.entries(map)) {
+            if (error.toLowerCase().includes(k))
+                return v;
+        }
+        return error.slice(0, 40);
+    }
+    recordInteraction(input, output) {
+        try {
+            const store = file_store_1.getMemoryStore();
+            // 保存更多上下文：输入前 500 字 + 输出前 1000 字
+            const inputBrief = input.length > 500 ? input.slice(0, 500) + '...' : input;
+            const outputBrief = output.length > 1000 ? output.slice(0, 1000) + '...' : output;
+            store.append(inputBrief + '\n' + outputBrief);
+        }
+        catch (err) {
+            logger.warn('[Agent] memory write failed', err);
+        }
+    }
+    stop() {
+        const active = this.projectManager.getActiveProject();
+        if (active && active.status === 'in_progress') {
+            this.projectManager.updateProjectMeta(active.project, { status: 'paused' });
+            this.projectManager.writeJournal(active.project, { timestamp: new Date().toISOString(), sessionId: this.sessionId, action: 'paused', result: 'partial', next: 'resume' });
+        }
+        this.running = false;
+        this.orchestrator.stopHeartbeat();
+        // P2: 自动会话摘要
+        try {
+            this.summarizer.summarizeSession(this.sessionId, this.messages.filter(m => m.role !== 'system'), []).catch(() => { });
+        }
+        catch { /* ignore */ }
+        // 关闭审计日志
+        try {
+            const summary = this.auditLog.getSessionSummary();
+            this.auditLog.endSession(summary);
+        }
+        catch { /* ignore */ }
+        if (this.dbInitialized) {
+            try {
+                db_store_1.getDBStore().endSession(this.sessionId, undefined, this.messages.length);
+            }
+            catch { /* ignore */ }
+        }
+        logger.info('Agent stopped');
+    }
+}
+export { AgentCore };
+

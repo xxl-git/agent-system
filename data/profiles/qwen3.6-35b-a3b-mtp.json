@@ -1,0 +1,316 @@
+{
+  "modelName": "qwen3.6-35b-a3b-mtp",
+  "capability": {
+    "modelName": "qwen3.6-35b-a3b-mtp",
+    "probedAt": "2026-06-23T15:47:47.755Z",
+    "results": [
+      {
+        "probeId": "tool_basic",
+        "category": "tool_calling",
+        "passed": false,
+        "durationMs": 186040,
+        "response": "[系统] 模型服务暂时不可用，已自动降级。"
+      },
+      {
+        "probeId": "tool_empty_loop",
+        "category": "tool_calling",
+        "passed": false,
+        "durationMs": 186019,
+        "response": "[系统] 模型服务暂时不可用，已自动降级。"
+      },
+      {
+        "probeId": "json_simple",
+        "category": "json_output",
+        "passed": false,
+        "durationMs": 186090,
+        "response": "[系统] 模型服务暂时不可用，已自动降级。"
+      },
+      {
+        "probeId": "json_complex",
+        "category": "json_output",
+        "passed": false,
+        "durationMs": 186059,
+        "response": "[系统] 模型服务暂时不可用，已自动降级。"
+      },
+      {
+        "probeId": "reasoning_logic",
+        "category": "reasoning",
+        "passed": false,
+        "durationMs": 186061,
+        "response": "[系统] 模型服务暂时不可用，已自动降级。"
+      },
+      {
+        "probeId": "context_8k",
+        "category": "context",
+        "passed": false,
+        "durationMs": 186038,
+        "response": "[系统] 模型服务暂时不可用，已自动降级。"
+      },
+      {
+        "probeId": "stability_repeat",
+        "category": "stability",
+        "passed": false,
+        "durationMs": 186044,
+        "response": "[系统] 模型服务暂时不可用，已自动降级。"
+      }
+    ],
+    "scores": {
+      "tool_calling": {
+        "category": "tool_calling",
+        "score": 0,
+        "passed": 0,
+        "total": 2,
+        "criticalFailed": true
+      },
+      "json_output": {
+        "category": "json_output",
+        "score": 0,
+        "passed": 0,
+        "total": 2,
+        "criticalFailed": false
+      },
+      "reasoning": {
+        "category": "reasoning",
+        "score": 0,
+        "passed": 0,
+        "total": 1,
+        "criticalFailed": false
+      },
+      "context": {
+        "category": "context",
+        "score": 0,
+        "passed": 0,
+        "total": 1,
+        "criticalFailed": false
+      },
+      "stability": {
+        "category": "stability",
+        "score": 0,
+        "passed": 0,
+        "total": 1,
+        "criticalFailed": false
+      }
+    },
+    "overallScore": 0,
+    "recommendations": [
+      "工具调用不稳定，建议禁用 parallelToolCalls",
+      "JSON 输出不稳定，建议使用 structured prompt wrapper",
+      "建议分块发送长上下文"
+    ],
+    "warnings": [
+      "工具调用能力弱，考虑纯文本降级模式",
+      "8K 上下文测试失败，可能上下文窗口较小"
+    ],
+    "stage": "probing",
+    "strategy": {
+      "maxTools": 0,
+      "useCoT": true,
+      "maxTokens": 1024,
+      "temperature": 0.3,
+      "parallelToolCalls": false,
+      "retryOnToolError": false,
+      "promptWrapper": "verbose"
+    }
+  },
+  "behavior": {
+    "maxTools": 0,
+    "useCoT": true,
+    "maxTokens": 1024,
+    "temperature": 0.3,
+    "parallelToolCalls": false,
+    "retryOnToolError": false,
+    "promptWrapper": "verbose"
+  },
+  "interactionHistory": [
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 6067,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-23T16:28:57.920Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6104,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:21:31.510Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6055,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:21:34.545Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6047,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:21:37.567Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6053,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:21:40.567Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6068,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:21:43.589Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6051,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:21:46.600Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6048,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:21:49.615Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6056,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:21:52.646Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6066,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:21:55.650Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6061,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:21:58.664Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6056,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:22:01.666Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6065,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:22:04.685Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6059,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:22:07.700Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6051,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:22:10.691Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 6059,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-24T14:22:13.716Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 6074,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-25T12:42:06.300Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 6177,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-25T12:42:58.701Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 6076,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-25T13:35:31.557Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 186146,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-25T14:33:29.128Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 6046,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-25T14:38:37.479Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 6040,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-25T14:40:43.419Z"
+    }
+  ],
+  "stats": {
+    "totalInteractions": 22,
+    "successRate": 1,
+    "avgDurationMs": 14251.136363636364,
+    "toolErrorRate": 0,
+    "lastUsed": "2026-06-25T14:40:43.419Z",
+    "preferredTasks": [
+      "chat",
+      "unknown"
+    ]
+  },
+  "stage": "learning",
+  "createdAt": "2026-06-23T15:26:05.354Z",
+  "updatedAt": "2026-06-25T14:40:43.419Z"
+}

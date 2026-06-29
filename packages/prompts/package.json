@@ -1,0 +1,32 @@
+{
+  "name": "@agent-system/prompts",
+  "version": "0.1.0",
+  "description": "Prompt management module for Agent System - registry and assembler",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "config/prompts"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "Remove-Item -Path dist -Recurse -Force",
+    "test": "echo \"No tests yet\""
+  },
+  "dependencies": {
+    "js-yaml": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  },
+  "keywords": [
+    "agent",
+    "prompt",
+    "llm",
+    "template"
+  ],
+  "author": "Agent System Team",
+  "license": "MIT"
+}

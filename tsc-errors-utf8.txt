@@ -1,0 +1,9 @@
+'�变量注入：' is not recognized as an internal or external command,
+operable program or batch file.
+'X_CLI_JS:' is not recognized as an internal or external command,
+operable program or batch file.
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 11.17.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.17.0
+npm notice To update run: npm install -g npm@11.17.0
+npm notice

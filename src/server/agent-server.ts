@@ -1,0 +1,918 @@
+// Agent HTTP Server — REST + WebSocket 对外服务
+// 端口 19701
+import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
+import { AgentCore } from '../core/agent/agent-core';
+import { agentEventBus } from '../core/agent-event-bus';
+import { loadConfig, getConfig } from '../config';
+import { logger } from '../logger';
+import { getFullDashboard, getProjectsSummary, getSkillsSummary, getAuditSummary, getModelSummary, getHealthSummary, getMemorySummary, getContextSummary, getFileListing, getLogStatus, getResilienceSummary } from './dashboard-api';
+import { sessionStore } from './session-store';
+
+const PORT = parseInt(process.env.PORT || String(getConfig().server?.port || 19701), 10);
+const STATIC_DIR = path.resolve(__dirname, '..', '..');
+
+// ─── MIME ───
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain; charset=utf-8',
+  '.zip': 'application/zip',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4',
+};
+
+function serveStatic(res: http.ServerResponse, filePath: string) {
+  try {
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType = MIME[ext] || 'application/octet-stream';
+    const content = fs.readFileSync(filePath);
+    res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+    res.end(content);
+  } catch {
+    res.writeHead(500);
+    res.end('Server error');
+  }
+}
+
+// ─── 全局 agent 实例 ───
+let agent: AgentCore | null = null;
+let agentInitPromise: Promise<AgentCore> | null = null;
+let agentReady = false;
+
+async function ensureAgent(): Promise<AgentCore> {
+  if (agent && agentReady) return agent;
+  // 防止并发初始化
+  if (agentInitPromise) return agentInitPromise;
+
+  agentInitPromise = (async () => {
+    const cfg = getConfig().logging;
+    const logLevel = (cfg?.level as 'debug' | 'info' | 'warn' | 'error') || 'info';
+    logger.setLevel(logLevel);
+    logger.setMaxFileSize(cfg?.maxFileSizeMB ?? 10);
+    logger.setMaxRotatedFiles(cfg?.maxRotatedFiles ?? 5);
+    logger.info(`[AgentServer] 日志级别: ${logLevel}, 轮转阈值: ${cfg?.maxFileSizeMB ?? 10}MB, 保留: ${cfg?.maxRotatedFiles ?? 5}个`);
+    agent = new AgentCore();
+    // 初始化会话存储
+    await sessionStore.init(path.resolve(__dirname, '..', '..', 'data'));
+    const initMsg = await agent.init();
+    if (initMsg) console.log('[AgentServer] ' + initMsg.replace(/\n/g, ' '));
+    agentReady = true;
+    console.log('[AgentServer] Agent 就绪');
+    broadcastSSE({ type: 'ready' });
+    // 监听 Agent 事件总线，转发为 SSE
+    agentEventBus.on('status', (data) => {
+      broadcastSSE({ type: 'agent_status', ...data });
+    });
+    // 监听 model_payload 事件（模型请求调试用）
+    agentEventBus.on('model_payload', (data) => {
+      broadcastSSE({ type: 'model_payload', ...data });
+    });
+    return agent;
+  })();
+
+  return agentInitPromise;
+}
+
+// ─── SSE 事件推送 ───
+const sseClients = new Set<http.ServerResponse>();
+
+function broadcastSSE(data: any) {
+  const msg = `data: ${JSON.stringify(data)}\n\n`;
+  for (const c of sseClients) {
+    try { c.write(msg); } catch { sseClients.delete(c); }
+  }
+}
+
+// ─── HTTP Server ───
+const server = http.createServer(async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+  const url = req.url || '/';
+
+  // SSE 事件流
+  if (url === '/api/events') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+    res.write('data: {"type":"connected"}\n\n');
+    sseClients.add(res);
+    req.on('close', () => sseClients.delete(res));
+    return;
+  }
+
+  // 只允许 GET 的 API 路由
+  function isGet(): boolean { return req.method === 'GET'; }
+  function isPost(): boolean { return req.method === 'POST'; }
+
+  // 路径安全检查：禁止 .. 目录穿越和绝对路径
+  function safePath(input: string): string | null {
+    // URL 解码（防御 %2e%2e 等编码绕过）
+    const decoded = decodeURIComponent(input);
+    // 全方位检测目录穿越
+    if (decoded.includes('..') || decoded.includes('~') || /^[A-Za-z]:/.test(decoded)) return null;
+    const resolved = path.resolve(STATIC_DIR, '.' + decoded);
+    if (!resolved.startsWith(STATIC_DIR)) return null;
+    // 再次检查 resolved 中是否有相对路径残留（Windows 需处理 \ 分隔符）
+    const normalizedResolved = resolved.replace(/\\/g, '/');
+    const normalizedStatic = STATIC_DIR.replace(/\\/g, '/');
+    if (!normalizedResolved.startsWith(normalizedStatic)) return null;
+    return decoded;
+  }
+
+  // API: GET /api/status
+  if (url === '/api/status' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      status: agentReady ? 'Agent v0.5.0' : 'initializing',
+      model: agentReady ? (agent as any)?.adapter?.model || 'unknown' : 'loading...',
+      sessionId: agentReady ? (agent as any)?.sessionId || '-' : '-',
+      uptime: process.uptime(),
+      ready: agentReady,
+    }));
+    return;
+  }
+
+  // API: GET /api/dashboard — 完整仪表盘数据
+  if (url === '/api/dashboard' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    const dash = getFullDashboard(agentReady ? agent : null);
+    res.end(JSON.stringify(dash));
+    return;
+  }
+
+  // API: GET /api/dashboard/projects — 项目管理
+  if (url === '/api/dashboard/projects' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(getProjectsSummary()));
+    return;
+  }
+
+  // API: GET /api/dashboard/skills — 技能注册
+  if (url === '/api/dashboard/skills' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(getSkillsSummary()));
+    return;
+  }
+
+  // API: GET /api/dashboard/models — 模型状态
+  if (url === '/api/dashboard/models' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(getModelSummary(agentReady ? agent : null)));
+    return;
+  }
+
+  // API: GET /api/dashboard/health — 韧性状态
+  if (url === '/api/dashboard/health' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(getHealthSummary(agentReady ? agent : null)));
+    return;
+  }
+
+  // API: GET /api/resilience/status — 弹性状态详情（熔断器 + 健康 + 重试）
+  if (url === '/api/resilience/status' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(getResilienceSummary(agentReady ? agent : null)));
+    return;
+  }
+
+  // API: GET /api/logs/status — 日志轮转状态
+  if (url === '/api/logs/status' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(getLogStatus()));
+    return;
+  }
+
+  // API: GET /api/logs — 列出日志文件
+  if (url === '/api/logs' && isGet()) {
+    try {
+      const config = getConfig();
+      const logDir = (config.logging as any)?.dir || './logs';
+      const fullPath = path.resolve(process.cwd(), logDir);
+      if (!fs.existsSync(fullPath)) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ files: [] }));
+        return;
+      }
+      const files = fs.readdirSync(fullPath)
+        .filter(f => f.endsWith('.log') || f.endsWith('.log.gz'))
+        .map(f => {
+          const filePath = path.join(fullPath, f);
+          const stat = fs.statSync(filePath);
+          // Extract date using regex (matches YYYY-MM-DD)
+            const dateMatch = f.match(/(\d{4}-\d{2}-\d{2})/);
+            return {
+            date: dateMatch ? dateMatch[1] : null,
+            size: stat.size,
+            compressed: f.endsWith('.gz'),
+            mtime: stat.mtime,
+          };
+        })
+        .filter(f => f.date !== null)  // Only return date-named files
+        .sort((a: any, b: any) => b.date.localeCompare(a.date));
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ files }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: GET /api/logs/:date — 读取指定日期的日志
+  if (url.startsWith('/api/logs/') && isGet()) {
+    try {
+      const date = url.split('/')[3];
+      const config = getConfig();
+      const logDir = (config.logging as any)?.dir || './logs';
+      const fullPath = path.resolve(process.cwd(), logDir);
+      let filePath = path.join(fullPath, `${date}.log`);
+      let content = '';
+      if (fs.existsSync(filePath)) {
+        content = fs.readFileSync(filePath, 'utf-8');
+      } else {
+        filePath = path.join(fullPath, `${date}.log.gz`);
+        if (fs.existsSync(filePath)) {
+          const zlib = require('zlib');
+          content = zlib.gunzipSync(fs.readFileSync(filePath)).toString('utf-8');
+        } else {
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'LogFileNotFound' }));
+          return;
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end(content);
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: GET /api/dashboard/memory — 记忆统计
+  if (url === '/api/dashboard/memory' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(getMemorySummary(agentReady ? agent : null)));
+    return;
+  }
+
+  // API: GET /api/dashboard/context — 上下文管理统计
+  if (url === '/api/dashboard/context' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(getContextSummary()));
+    return;
+  }
+
+  // API: GET /api/models — 列出 LM Studio 中已加载的模型（含完整元数据）
+  if (url === '/api/models' && isGet()) {
+    try {
+      const cfg = getConfig();
+      const providerUrl = cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1';
+      const lmRes = await fetch(`${providerUrl}/models`, { signal: AbortSignal.timeout(5000) });
+      const lmData: any = await lmRes.json();
+      const rawModels = lmData.data || [];
+      // 返回完整模型元数据
+      const models = rawModels.map((m: any) => ({
+        id: m.id,
+        object: m.object || 'model',
+        owned_by: m.owned_by || m.publisher || 'unknown',
+        context_length: m.context_length || 0,
+        arch: m.arch || 'unknown',
+        publisher: m.publisher || 'unknown',
+        type: m.type || 'llm',
+        loaded: true,  // /v1/models 只返回已加载的模型
+      }));
+
+      // 同时获取 agent 当前使用的模型名（从运行实例获取，而非静态配置）
+      let currentModel = cfg.models?.providers?.lmstudio?.model || 'unknown';
+      if (agent && agentReady) {
+        try { currentModel = agent.adapter.model; } catch { /* ignore */ }
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        models,
+        current: currentModel,
+        timeout: cfg.agent?.callTimeoutMs || 60000,
+        lmStudioUrl: providerUrl,
+        connected: rawModels.length > 0,
+      }));
+    } catch (err: any) {
+      const errMsg = err.message || '';
+      const isConnectionRefused = errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch failed') || errMsg.includes('aggregateError');
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        models: [],
+        current: 'unknown',
+        error: isConnectionRefused
+          ? 'LM Studio 服务未启动 (ECONNREFUSED)'
+          : errMsg,
+        connected: false,
+        hint: isConnectionRefused
+          ? '请启动 LM Studio 并加载模型'
+          : undefined,
+      }));
+    }
+    return;
+  }
+
+  // API: POST /api/models/switch — 热切换运行中的模型（无需重启）
+  // 注意：热切换不依赖 agentReady，初始化探针期间也可以切换
+  if (url === '/api/models/switch' && isPost()) {
+    if (!agent) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Agent 尚未初始化' }));
+      return;
+    }
+    try {
+      const body = await readBody(req);
+      const { model: modelId } = JSON.parse(body);
+      if (!modelId || typeof modelId !== 'string') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '缺少 model 字段' }));
+        return;
+      }
+
+      // 1. 验证模型在 LM Studio 中已加载
+      const cfg = getConfig();
+      const providerUrl = cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1';
+      let modelInfo: any = null;
+      try {
+        const lmRes = await fetch(`${providerUrl}/models`, { signal: AbortSignal.timeout(5000) });
+        const lmData: any = await lmRes.json();
+        const found = (lmData.data || []).find((m: any) => m.id === modelId);
+        if (!found) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: `模型 "${modelId}" 未在 LM Studio 中加载` }));
+          return;
+        }
+        modelInfo = found;
+      } catch (lmErr: any) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `无法连接 LM Studio: ${lmErr.message}` }));
+        return;
+      }
+
+      // 2. 热切换运行实例的模型
+      const oldModel = agent.adapter.model;
+      agent.adapter.setModel(modelId);
+
+      // 3. 更新上下文长度（从模型元数据获取）
+      if (modelInfo.context_length) {
+        try {
+          // SmartAdapter 代理了 contextLength，但它是 getter 从 raw 读取
+          // LMStudioAdapter.contextLength 是 public 可写属性
+          (agent.adapter as any).raw.contextLength = modelInfo.context_length;
+        } catch { /* ignore */ }
+      }
+
+      // 4. 持久化到 YAML 配置
+      try {
+        const yamlPath = path.resolve(__dirname, '..', '..', 'config', 'agent-system.yaml');
+        const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
+        // 替换 model 行
+        const updated = yamlContent.replace(
+          /(\s+model:\s*")[^"]+(")/,
+          `$1${modelId}$2`
+        );
+        if (updated !== yamlContent) {
+          fs.writeFileSync(yamlPath, updated, 'utf-8');
+          logger.info(`[AgentServer] 模型切换已持久化到 YAML: ${oldModel} → ${modelId}`);
+        }
+      } catch (yamlErr: any) {
+        logger.warn('[AgentServer] 更新 YAML 模型配置失败', yamlErr);
+      }
+
+      // 5. 重载内存配置使 getConfig() 反映新模型
+      loadConfig();
+
+      logger.info(`[AgentServer] 模型热切换: ${oldModel} → ${modelId} (context=${modelInfo.context_length || '?'})`);
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        ok: true,
+        previousModel: oldModel,
+        currentModel: modelId,
+        contextLength: modelInfo.context_length || 0,
+        arch: modelInfo.arch || 'unknown',
+        publisher: modelInfo.publisher || 'unknown',
+        message: `模型已切换: ${oldModel} → ${modelId}`,
+      }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: POST /api/models/scan — 重新扫描 LM Studio 加载的模型
+  if (url === '/api/models/scan' && isPost()) {
+    try {
+      const cfg = getConfig();
+      const providerUrl = cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1';
+      const lmRes = await fetch(`${providerUrl}/models`, { signal: AbortSignal.timeout(5000) });
+      const lmData: any = await lmRes.json();
+      const models = (lmData.data || []).map((m: any) => ({
+        id: m.id,
+        context_length: m.context_length || 0,
+        arch: m.arch || 'unknown',
+        publisher: m.publisher || 'unknown',
+        type: m.type || 'llm',
+      }));
+      let currentModel = cfg.models?.providers?.lmstudio?.model || 'unknown';
+      if (agent && agentReady) {
+        try { currentModel = agent.adapter.model; } catch { /* ignore */ }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        ok: true,
+        models,
+        current: currentModel,
+        count: models.length,
+        connected: models.length > 0,
+      }));
+    } catch (err: any) {
+      // 区分错误类型：连接拒绝（LM Studio 未启动）vs 其他错误
+      const errMsg = err.message || '';
+      const isConnectionRefused = errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch failed') || errMsg.includes('aggregateError');
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        ok: false,
+        models: [],
+        error: isConnectionRefused
+          ? 'LM Studio 服务未启动 (ECONNREFUSED)'
+          : errMsg,
+        connected: false,
+        hint: isConnectionRefused
+          ? '请启动 LM Studio 并加载模型'
+          : undefined,
+      }));
+    }
+    return;
+  }
+
+  // API: POST /api/config — 更新配置
+  if (url === '/api/config' && isPost()) {
+    try {
+      const body = await readBody(req);
+      const { model, callTimeoutMs, maxRetries, maxTokens, chatTimeoutMs } = JSON.parse(body);
+      
+      const configPath = path.resolve(__dirname, '..', '..', 'config', 'default.json');
+      const raw = fs.readFileSync(configPath, 'utf-8');
+      const currentConfig = JSON.parse(raw);
+
+      if (model) currentConfig.models.providers.lmstudio.model = model;
+      if (callTimeoutMs) currentConfig.agent.callTimeoutMs = Number(callTimeoutMs);
+      if (maxRetries !== undefined) currentConfig.agent.maxRetries = Number(maxRetries);
+      if (maxTokens) currentConfig.models.providers.lmstudio.maxTokens = Number(maxTokens);
+      if (chatTimeoutMs) {
+        // 写入 YAML 配置的 server 段
+        const yamlPath = path.resolve(__dirname, '..', '..', 'config', 'agent-system.yaml');
+        try {
+          const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
+          let updated = yamlContent;
+          if (/chatTimeoutMs:\s*\d+/.test(updated)) {
+            updated = updated.replace(/chatTimeoutMs:\s*\d+/, `chatTimeoutMs: ${Number(chatTimeoutMs)}`);
+          } else {
+            updated += `\nserver:\n  chatTimeoutMs: ${Number(chatTimeoutMs)}\n`;
+          }
+          fs.writeFileSync(yamlPath, updated, 'utf-8');
+        } catch (e) {
+          logger.warn('[AgentServer] 更新 chatTimeoutMs 到 YAML 失败', e);
+        }
+      }
+
+      fs.writeFileSync(configPath, JSON.stringify(currentConfig, null, 2), 'utf-8');
+
+      // 同步更新内存中的配置，使 GET /api/config 立即反映更改
+      loadConfig();
+      
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, message: '配置已更新，重启后生效', changes: { model, callTimeoutMs, maxRetries, maxTokens, chatTimeoutMs } }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: GET /api/config — 查看当前配置
+  if (url === '/api/config' && isGet()) {
+    try {
+      const cfg = getConfig();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        model: cfg.models?.providers?.lmstudio?.model || 'unknown',
+        baseUrl: cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1',
+        callTimeoutMs: cfg.agent?.callTimeoutMs || 60000,
+        maxRetries: cfg.agent?.maxRetries ?? 1,
+        maxTokens: cfg.models?.providers?.lmstudio?.maxTokens || 2048,
+        heartbeatIntervalMs: cfg.agent?.heartbeatIntervalMs || 300000,
+        chatTimeoutMs: cfg.server?.chatTimeoutMs || 120000,
+      }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: POST /api/chat
+  if (url === '/api/chat' && isPost()) {
+    if (!agentReady) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ reply: 'Agent 正在初始化，请稍候...', duration: 0 }));
+      return;
+    }
+    try {
+      const body = await readBody(req);
+      const { message } = JSON.parse(body);
+      if (!message || typeof message !== 'string') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '缺少 message 字段' }));
+        return;
+      }
+
+      const ag = await ensureAgent();
+      const t0 = Date.now();
+      const reply = await ag.sendMessage(message);
+      const duration = Date.now() - t0;
+
+      broadcastSSE({ type: 'chat', input: message.slice(0, 100), output: reply.slice(0, 200), duration });
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ reply, duration }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: POST /api/chat/stream — SSE 流式聊天
+  if (url === '/api/chat/stream' && isPost()) {
+    if (!agentReady) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Agent 正在初始化' }));
+      return;
+    }
+    try {
+      const body = await readBody(req);
+      const { message } = JSON.parse(body);
+      if (!message || typeof message !== 'string') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '缺少 message 字段' }));
+        return;
+      }
+
+      // 设置 SSE 头
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+      res.write('data: {"type":"start"}\n\n');
+
+      const ag = await ensureAgent();
+      const t0 = Date.now();
+
+      // 使用一次性监听器转发 chunk 事件到当前 response
+      const chunkWriter = (chunk: string) => {
+        try {
+          res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`);
+        } catch { /* connection closed */ }
+      };
+      const doneWriter = (data: { fullReply: string; durationMs: number }) => {
+        try {
+          res.write(`data: ${JSON.stringify({ type: 'done', fullReply: data.fullReply, duration: data.durationMs })}\n\n`);
+          res.end();
+        } catch { /* connection closed */ }
+      };
+      const errorWriter = (error: string) => {
+        try {
+          res.write(`data: ${JSON.stringify({ type: 'error', error })}\n\n`);
+          res.end();
+        } catch { /* connection closed */ }
+      };
+
+      agentEventBus.on('chat_chunk', chunkWriter);
+      agentEventBus.on('chat_done', doneWriter);
+      agentEventBus.on('chat_error', errorWriter);
+
+      // 请求关闭时清理监听器
+      req.on('close', () => {
+        agentEventBus.off('chat_chunk', chunkWriter);
+        agentEventBus.off('chat_done', doneWriter);
+        agentEventBus.off('chat_error', errorWriter);
+      });
+
+      // 调用流式发送
+      ag.sendMessageStream(message).then((fullReply) => {
+        const duration = Date.now() - t0;
+        // 如果 done 事件已经发送了，这里确保 response 已结束
+        agentEventBus.off('chat_chunk', chunkWriter);
+        agentEventBus.off('chat_done', doneWriter);
+        agentEventBus.off('chat_error', errorWriter);
+        // 广播到全局 SSE（供调试面板）
+        broadcastSSE({ type: 'chat', input: message.slice(0, 100), output: fullReply.slice(0, 200), duration });
+        // 如果 response 还没结束，手动结束
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ type: 'done', fullReply, duration })}\n\n`);
+          res.end();
+        }
+      }).catch((err) => {
+        agentEventBus.off('chat_chunk', chunkWriter);
+        agentEventBus.off('chat_done', doneWriter);
+        agentEventBus.off('chat_error', errorWriter);
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+          res.end();
+        }
+      });
+    } catch (err: any) {
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+        res.end();
+      }
+    }
+    return;
+  }
+
+  // API: GET /api/sessions — 列出所有会话
+  if (url === '/api/sessions' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(sessionStore.listSessions()));
+    return;
+  }
+
+  // API: POST /api/sessions — 创建新会话
+  if (url === '/api/sessions' && isPost()) {
+    try {
+      const body = await readBody(req);
+      const { title } = JSON.parse(body || '{}');
+      const session = sessionStore.createSession(title);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(session));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: GET /api/sessions/:id — 获取会话详情
+  if (url.startsWith('/api/sessions/') && isGet()) {
+    const sessionId = url.split('/').pop() || '';
+    const session = sessionStore.getSession(sessionId);
+    if (!session) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: '会话不存在' }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(session));
+    return;
+  }
+
+  // API: PUT /api/sessions/:id — 更新会话（重命名或更新消息）
+  if (url.startsWith('/api/sessions/') && req.method === 'PUT') {
+    try {
+      const sessionId = url.split('/').pop() || '';
+      const body = await readBody(req);
+      const { title, messages } = JSON.parse(body);
+      if (title) sessionStore.renameSession(sessionId, title);
+      if (messages) sessionStore.updateMessages(sessionId, messages);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: DELETE /api/sessions/:id — 删除会话
+  if (url.startsWith('/api/sessions/') && req.method === 'DELETE') {
+    try {
+      const sessionId = url.split('/').pop() || '';
+      sessionStore.deleteSession(sessionId);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: POST /api/upload — 文件上传
+  if (url === '/api/upload' && isPost()) {
+    try {
+      const contentType = req.headers['content-type'] || '';
+      if (!contentType.includes('multipart/form-data')) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '需要 multipart/form-data' }));
+        return;
+      }
+
+      // 读取完整 body
+      const boundary = contentType.split('boundary=')[1];
+      if (!boundary) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '缺少 boundary' }));
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+      await new Promise<void>((resolve, reject) => {
+        req.on('data', (c: Buffer) => {
+          chunks.push(c);
+          const totalSize = chunks.reduce((a, c) => a + c.length, 0);
+          const maxBytes = (getConfig().server?.maxUploadSizeMB || 20) * 1024 * 1024;
+          if (totalSize > maxBytes) {
+            reject(new Error(`文件大小超过限制 (${maxBytes / 1024 / 1024}MB)`));
+          }
+        });
+        req.on('end', () => resolve());
+        req.on('error', reject);
+      });
+
+      const fullBuffer = Buffer.concat(chunks);
+      const parsed = parseMultipart(fullBuffer, boundary);
+
+      if (!parsed || !parsed.filename) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: '未找到文件' }));
+        return;
+      }
+
+      // 确保上传目录存在
+      const uploadsDir = path.resolve(STATIC_DIR, 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      // 生成唯一文件名
+      const ext = path.extname(parsed.filename);
+      const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+      const filePath = path.join(uploadsDir, uniqueName);
+      fs.writeFileSync(filePath, parsed.data);
+
+      const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext.toLowerCase());
+      const fileUrl = `/uploads/${uniqueName}`;
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        ok: true,
+        url: fileUrl,
+        filename: parsed.filename,
+        isImage,
+        size: parsed.data.length,
+      }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // 静态文件服务：/uploads/
+  if (url.startsWith('/uploads/')) {
+    const sanitized = safePath(url);
+    if (!sanitized) {
+      res.writeHead(403, { 'Content-Type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+    const staticPath = path.resolve(STATIC_DIR, '.' + sanitized);
+    if (!staticPath.startsWith(STATIC_DIR)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain' });
+      res.end('Forbidden');
+      return;
+    }
+    serveStatic(res, staticPath);
+    return;
+  }
+
+    // API: GET /api/files?dir=xxx — 文件浏览
+  if (url.startsWith('/api/files') && isGet()) {
+    const parsedUrl = new URL(url, 'http://localhost');
+    const dir = parsedUrl.searchParams.get('dir') || '';
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(getFileListing(dir)));
+    return;
+  }
+
+  // 静态页面 — 带路径穿越防护
+  const cleanUrl = url === '/' ? '/agent-ui.html' : url === '/admin' || url === '/admin/' ? '/admin-panel.html' : url === '/chat' ? '/agent-ui.html' : url === '/audit' ? '/audit-dashboard.html' : url;
+  const sanitized = safePath(cleanUrl.replace(/\?.*$/, ''));
+  if (!sanitized) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Forbidden: path contains directory traversal');
+    return;
+  }
+  const staticPath = path.resolve(STATIC_DIR, '.' + sanitized);
+  // resolve 后校验是否仍在 STATIC_DIR 下
+  if (!staticPath.startsWith(STATIC_DIR)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Forbidden: path escape detected');
+    return;
+  }
+  // 禁止直接访问敏感目录（config/, dist/, src/, node_modules/, .git/ 等）
+  const RELATIVE = path.relative(STATIC_DIR, staticPath).toLowerCase();
+  if (RELATIVE.startsWith('config') || RELATIVE.startsWith('dist') || RELATIVE.startsWith('src') || RELATIVE.startsWith('node_modules') || RELATIVE.startsWith('.git') || RELATIVE.startsWith('.qclaw') || RELATIVE.startsWith('.claw')) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Forbidden: accessing restricted directory');
+    return;
+  }
+  serveStatic(res, staticPath);
+});
+
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', c => { body += c; if (body.length > 1_000_000) reject(new Error('body too large')); });
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+
+/** 解析 multipart/form-data — 提取第一个文件 */
+function parseMultipart(buffer: Buffer, boundary: string): { filename: string; data: Buffer } | null {
+  const boundaryBuffer = Buffer.from('--' + boundary);
+  const parts: Buffer[] = [];
+  let start = 0;
+
+  // 按 boundary 分割
+  while (true) {
+    const idx = buffer.indexOf(boundaryBuffer, start);
+    if (idx === -1) break;
+    if (start > 0) {
+      parts.push(buffer.slice(start, idx - 2)); // -2 for \r\n before boundary
+    }
+    start = idx + boundaryBuffer.length + 2; // +2 for \r\n after boundary
+  }
+
+  // 处理每个 part，找到包含文件的 part
+  for (const part of parts) {
+    const headerEnd = part.indexOf('\r\n\r\n');
+    if (headerEnd === -1) continue;
+
+    const headerStr = part.slice(0, headerEnd).toString('utf-8');
+    const fileData = part.slice(headerEnd + 4, part.length - 2); // -2 for trailing \r\n
+
+    // 解析 Content-Disposition
+    const filenameMatch = headerStr.match(/filename="([^"]+)"/);
+    if (!filenameMatch) continue;
+
+    const filename = filenameMatch[1];
+    if (!filename) continue;
+
+    return { filename, data: fileData };
+  }
+
+  return null;
+}
+
+// ─── 启动 ───
+// 先加载配置（必须在 listen 之前执行，否则 getConfig() 会因竞态抛出「未加载」）
+loadConfig();
+
+console.log(`[Startup] 准备监听端口 ${PORT}...`);
+
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`[Startup] ✓ 端口 ${PORT} 监听成功`);
+  console.log(`Agent HTTP Server: http://127.0.0.1:${PORT}`);
+  ensureAgent().catch(err => console.error('[AgentServer] 初始化失败:', err.message));
+});
+
+server.on('error', (err) => {
+  console.error(`[Startup] ✗ 监听失败:`, err);
+});
+
+process.on('SIGINT', () => { agent?.stop(); server.close(); process.exit(0); });

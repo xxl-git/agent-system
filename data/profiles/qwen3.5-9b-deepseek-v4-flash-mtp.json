@@ -1,0 +1,301 @@
+{
+  "modelName": "qwen3.5-9b-deepseek-v4-flash-mtp",
+  "capability": {
+    "modelName": "qwen3.5-9b-deepseek-v4-flash-mtp",
+    "probedAt": "2026-06-28T09:21:27.944Z",
+    "results": [
+      {
+        "probeId": "tool_basic",
+        "category": "tool_calling",
+        "passed": false,
+        "durationMs": 62060,
+        "response": "[系统] 模型调用失败 (6次重试): fetch failed"
+      },
+      {
+        "probeId": "tool_empty_loop",
+        "category": "tool_calling",
+        "passed": false,
+        "durationMs": 62048,
+        "response": "[系统] 模型调用失败 (6次重试): fetch failed"
+      },
+      {
+        "probeId": "json_simple",
+        "category": "json_output",
+        "passed": false,
+        "durationMs": 62048,
+        "response": "[系统] 模型调用失败 (6次重试): fetch failed"
+      },
+      {
+        "probeId": "json_complex",
+        "category": "json_output",
+        "passed": false,
+        "durationMs": 62066,
+        "response": "[系统] 模型调用失败 (6次重试): fetch failed"
+      },
+      {
+        "probeId": "reasoning_logic",
+        "category": "reasoning",
+        "passed": false,
+        "durationMs": 62050,
+        "response": "[系统] 模型调用失败 (6次重试): fetch failed"
+      },
+      {
+        "probeId": "context_8k",
+        "category": "context",
+        "passed": false,
+        "durationMs": 62043,
+        "response": "[系统] 模型调用失败 (6次重试): fetch failed"
+      },
+      {
+        "probeId": "stability_repeat",
+        "category": "stability",
+        "passed": false,
+        "durationMs": 62060,
+        "response": "[系统] 模型调用失败 (6次重试): fetch failed"
+      }
+    ],
+    "scores": {
+      "tool_calling": {
+        "category": "tool_calling",
+        "score": 0,
+        "passed": 0,
+        "total": 2,
+        "criticalFailed": true
+      },
+      "json_output": {
+        "category": "json_output",
+        "score": 0,
+        "passed": 0,
+        "total": 2,
+        "criticalFailed": false
+      },
+      "reasoning": {
+        "category": "reasoning",
+        "score": 0,
+        "passed": 0,
+        "total": 1,
+        "criticalFailed": false
+      },
+      "context": {
+        "category": "context",
+        "score": 0,
+        "passed": 0,
+        "total": 1,
+        "criticalFailed": false
+      },
+      "stability": {
+        "category": "stability",
+        "score": 0,
+        "passed": 0,
+        "total": 1,
+        "criticalFailed": false
+      }
+    },
+    "overallScore": 0,
+    "recommendations": [
+      "工具调用不稳定，建议禁用 parallelToolCalls",
+      "JSON 输出不稳定，建议使用 structured prompt wrapper",
+      "建议分块发送长上下文"
+    ],
+    "warnings": [
+      "工具调用能力弱，考虑纯文本降级模式",
+      "8K 上下文测试失败，可能上下文窗口较小"
+    ],
+    "stage": "probing",
+    "strategy": {
+      "maxTools": 0,
+      "useCoT": true,
+      "maxTokens": 1024,
+      "temperature": 0.3,
+      "parallelToolCalls": false,
+      "retryOnToolError": false,
+      "promptWrapper": "verbose"
+    }
+  },
+  "behavior": {
+    "maxTools": 0,
+    "useCoT": true,
+    "maxTokens": 1024,
+    "temperature": 0.3,
+    "parallelToolCalls": false,
+    "retryOnToolError": false,
+    "promptWrapper": "verbose"
+  },
+  "interactionHistory": [
+    {
+      "taskType": "query",
+      "success": true,
+      "durationMs": 33570,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T02:36:41.759Z"
+    },
+    {
+      "taskType": "query",
+      "success": true,
+      "durationMs": 91391,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T02:42:39.849Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 43133,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T03:39:44.651Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 57755,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T03:50:31.784Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 26192,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T03:53:24.963Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 90031,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T04:13:38.922Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 56391,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T04:14:00.442Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 24081,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T04:15:19.698Z"
+    },
+    {
+      "taskType": "query",
+      "success": true,
+      "durationMs": 72493,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T05:09:01.974Z"
+    },
+    {
+      "taskType": "query",
+      "success": true,
+      "durationMs": 48546,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T05:21:02.634Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 51278,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T05:31:26.762Z"
+    },
+    {
+      "taskType": "query",
+      "success": true,
+      "durationMs": 61124,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T05:48:49.148Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 95932,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T06:21:12.149Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 54656,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T06:23:47.990Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 89955,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T06:26:06.331Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 372116,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-21T06:54:06.196Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 15890,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-28T10:06:53.897Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 52537,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-28T10:08:18.151Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 23851,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-28T10:11:28.644Z"
+    },
+    {
+      "taskType": "query",
+      "success": true,
+      "durationMs": 70937,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-28T10:15:52.000Z"
+    }
+  ],
+  "stats": {
+    "totalInteractions": 20,
+    "successRate": 1,
+    "avgDurationMs": 71592.95,
+    "toolErrorRate": 0,
+    "lastUsed": "2026-06-28T10:15:52.000Z",
+    "preferredTasks": [
+      "query",
+      "chat",
+      "unknown"
+    ]
+  },
+  "stage": "learning",
+  "createdAt": "2026-06-21T02:25:39.858Z",
+  "updatedAt": "2026-06-28T10:15:52.000Z"
+}

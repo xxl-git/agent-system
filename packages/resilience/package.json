@@ -1,0 +1,20 @@
+{
+  "name": "@agent-system/resilience",
+  "version": "0.1.0",
+  "description": "Resilience module for Agent System - circuit breaker, retry, health monitor, degradation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "clean": "Remove-Item -Path dist -Recurse -Force",
+    "test": "echo \"No tests yet\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  },
+  "keywords": ["agent", "resilience", "circuit-breaker", "retry", "health"],
+  "author": "Agent System Team",
+  "license": "MIT"
+}

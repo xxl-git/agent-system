@@ -1,0 +1,13 @@
+{
+  "name": "@agent-system/models-core",
+  "version": "0.1.0",
+  "description": "Model probing, profiling, and difficulty assessment",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rmdir /s /q dist 2>nul & exit /b 0"
+  },
+  "keywords": ["models", "probe", "profile", "capability"],
+  "license": "MIT"
+}

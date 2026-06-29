@@ -1,0 +1,25 @@
+{
+  "modelName": "qwen2.5-7b-instruct",
+  "capability": null,
+  "behavior": {
+    "maxTools": 3,
+    "useCoT": false,
+    "maxTokens": 2048,
+    "temperature": 0.5,
+    "parallelToolCalls": false,
+    "retryOnToolError": true,
+    "promptWrapper": "structured"
+  },
+  "interactionHistory": [],
+  "stats": {
+    "totalInteractions": 0,
+    "successRate": 0,
+    "avgDurationMs": 0,
+    "toolErrorRate": 0,
+    "lastUsed": "2026-06-28T10:37:53.921Z",
+    "preferredTasks": []
+  },
+  "stage": "probing",
+  "createdAt": "2026-06-28T10:37:53.921Z",
+  "updatedAt": "2026-06-28T10:37:53.921Z"
+}

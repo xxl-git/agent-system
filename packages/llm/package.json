@@ -1,0 +1,16 @@
+{
+  "name": "@agent-system/llm",
+  "version": "0.1.0",
+  "description": "LLM routing, SmartAdapter, and LM Studio adapter",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rmdir /s /q dist 2>nul & exit /b 0"
+  },
+  "dependencies": {
+    "@agent-system/events": "0.1.0"
+  },
+  "keywords": ["llm", "lmstudio", "router"],
+  "license": "MIT"
+}

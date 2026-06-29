@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 审计仪表盘 v2</title>
+<style>
+/* ════════════════════════════════════════════════════
+   Agent System — 审计仪表盘 v2
+   Redesigned with glassmorphism & data-visualization polish
+   ════════════════════════════════════════════════════ */
+:root {
+  --bg: #05070a;
+  --bg-gradient: radial-gradient(ellipse at 40% 20%, #0d0f1a 0%, #05070a 60%);
+  --card-bg: rgba(14, 17, 24, 0.75);
+  --card-border: rgba(99, 102, 241, 0.06);
+  --text: #e4e4e7;
+  --text-dim: #8891a5;
+  --text-muted: #5c647a;
+  --accent: #6366f1;
+  --accent-glow: rgba(99,102,241,0.08);
+  --green: #22c55e;
+  --red: #ef4444;
+  --yellow: #f59e0b;
+  --blue: #3b82f6;
+  --purple: #a78bfa;
+  --orange: #f97316;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --transition: 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 0 0 1px rgba(99,102,241,0.03);
+  --shadow-lg: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(99,102,241,0.05);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg); background-image: var(--bg-gradient);
+  color: var(--text); font-family: -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;
+  padding: 24px 28px; min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background-image: linear-gradient(rgba(99,102,241,0.012) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(99,102,241,0.012) 1px, transparent 1px);
+  background-size: 48px 48px; pointer-events: none; z-index: 0;
+}
+
+@keyframes pageIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+body > * { position: relative; z-index: 1; animation: pageIn 0.5s both; }
+
+h1 {
+  font-size: 20px; margin-bottom: 2px; display: flex; align-items: center; gap: 10px;
+  font-weight: 700; letter-spacing: -0.3px;
+}
+h1 .live {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+  animation: livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(1.3); } }
+.subtitle { color: var(--text-dim); font-size: 12px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+
+/* ═══ Stats ═══ */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-card {
+  background: var(--card-bg); backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--card-border); border-radius: var(--radius-sm);
+  padding: 16px; text-align: center;
+  transition: var(--transition); animation: cardIn 0.4s both;
+}
+.stat-card:hover { border-color: rgba(99,102,241,0.12); transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+@keyframes cardIn { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.stat-card:nth-child(1) { animation-delay: 0.02s; }
+.stat-card:nth-child(2) { animation-delay: 0.04s; }
+.stat-card:nth-child(3) { animation-delay: 0.06s; }
+.stat-card:nth-child(4) { animation-delay: 0.08s; }
+.stat-card:nth-child(5) { animation-delay: 0.10s; }
+.stat-card:nth-child(6) { animation-delay: 0.12s; }
+.stat-card:nth-child(7) { animation-delay: 0.14s; }
+.stat-card .num { font-size: 26px; font-weight: 700; }
+.stat-card .label { font-size: 10px; color: var(--text-muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.4px; }
+
+/* ═══ Charts ═══ */
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.chart-box {
+  background: var(--card-bg); backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--card-border); border-radius: var(--radius);
+  padding: 18px; transition: var(--transition);
+  animation: cardIn 0.4s both;
+}
+.chart-box:hover { border-color: rgba(99,102,241,0.1); }
+.chart-box h3 { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+
+.pie-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-size: 11px; }
+.pie-legend span { display: flex; align-items: center; gap: 5px; }
+.pie-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+
+/* ═══ Tabs ═══ */
+.tabs { display: flex; gap: 2px; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.tab {
+  padding: 8px 18px; cursor: pointer; font-size: 12px; font-weight: 500;
+  border: none; background: none; color: var(--text-muted);
+  border-bottom: 2px solid transparent; transition: var(--transition);
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab:hover { color: var(--text); }
+.panel { display: none; }
+.panel.active { display: block; animation: fadeIn 0.25s; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ═══ Controls ═══ */
+.controls {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center;
+}
+.controls select, .controls input, .controls button {
+  background: var(--card-bg); backdrop-filter: blur(8px);
+  border: 1px solid var(--card-border); color: var(--text);
+  border-radius: 8px; padding: 7px 12px; font-size: 11px; font-family: inherit;
+  outline: none; transition: var(--transition);
+}
+.controls select:focus, .controls input:focus { border-color: rgba(99,102,241,0.2); }
+.controls button { cursor: pointer; }
+.controls button:hover { border-color: rgba(99,102,241,0.2); color: var(--accent); }
+.controls input[type=text] { flex: 1; min-width: 160px; max-width: 300px; }
+
+/* ═══ Timeline ═══ */
+.timeline { position: relative; padding-left: 24px; }
+.timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 1.5px; background: rgba(255,255,255,0.04); }
+.tl-item {
+  position: relative; padding: 8px 0 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+  transition: background 0.15s; border-radius: 6px; margin-left: -8px; padding-left: 24px;
+}
+.tl-item:hover { background: rgba(255,255,255,0.015); }
+.tl-item::before {
+  content: ''; position: absolute; left: -18px; top: 12px;
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.06); background: var(--bg);
+  transition: var(--transition);
+}
+.tl-item.success::before { border-color: var(--green); background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,0.3); }
+.tl-item.failure::before { border-color: var(--red); background: var(--red); box-shadow: 0 0 6px rgba(239,68,68,0.3); }
+.tl-item.recovered::before { border-color: var(--blue); background: var(--blue); box-shadow: 0 0 6px rgba(59,130,246,0.3); }
+.tl-item.degraded::before { border-color: var(--yellow); background: var(--yellow); box-shadow: 0 0 6px rgba(245,158,11,0.3); }
+.tl-time { font-size: 10px; color: var(--text-muted); }
+.tl-detail {
+  font-size: 12px; display: flex; gap: 8px; align-items: center;
+  flex-wrap: wrap; margin-top: 3px;
+}
+
+/* ═══ Table ═══ */
+.table-wrap {
+  overflow-x: auto; border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm); background: var(--card-bg); backdrop-filter: blur(8px);
+}
+table { width: 100%; border-collapse: collapse; font-size: 11px; }
+th, td { padding: 9px 14px; text-align: left; white-space: nowrap; }
+th {
+  font-weight: 600; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.4px; color: var(--text-muted);
+  background: rgba(255,255,255,0.02);
+  position: sticky; top: 0;
+}
+tr { border-top: 1px solid rgba(255,255,255,0.03); }
+tr:hover { background: rgba(255,255,255,0.015); }
+td.detail { max-width: 280px; white-space: normal; word-break: break-all; font-size: 10px; }
+
+/* ═══ Badges ═══ */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 8px;
+  font-size: 9px; font-weight: 600;
+}
+.bg-session{background:rgba(59,130,246,.12);color:var(--blue)}
+.bg-tool_call{background:rgba(167,139,250,.12);color:var(--purple)}
+.bg-decision{background:rgba(245,158,11,.12);color:var(--yellow)}
+.bg-model_switch{background:rgba(249,115,22,.12);color:var(--orange)}
+.bg-recovery{background:rgba(34,197,94,.12);color:var(--green)}
+.bg-degradation{background:rgba(239,68,68,.12);color:var(--red)}
+.bg-checkpoint{background:rgba(255,255,255,.05);color:var(--text-muted)}
+.bg-error{background:rgba(239,68,68,.2);color:var(--red)}
+
+.r-success { color: var(--green); }
+.r-failure { color: var(--red); }
+.r-degraded { color: var(--yellow); }
+.r-recovered { color: var(--blue); }
+.r-pending { color: var(--text-muted); }
+
+/* ═══ States ═══ */
+.empty-state { padding: 40px 20px; text-align: center; color: var(--text-muted); }
+.empty-state .icon { font-size: 40px; margin-bottom: 8px; opacity: 0.5; }
+.error-box {
+  background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15);
+  border-radius: 8px; padding: 12px; margin: 8px 0; color: var(--red); font-size: 12px;
+}
+
+/* ═══ Trend SVG ═══ */
+.trend-svg { width: 100%; height: 120px; }
+.trend-svg line, .trend-svg polyline, .trend-svg text { vector-effect: non-scaling-stroke; }
+
+/* ═══ Skeleton ═══ */
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0.02) 75%);
+  background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+@keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
+.skeleton-line { height: 12px; margin: 8px 0; }
+.skeleton-line:first-child { width: 70%; }
+.skeleton-line:nth-child(2) { width: 90%; }
+
+/* ═══ Responsive ═══ */
+@media (max-width: 768px) { .charts { grid-template-columns: 1fr; } body { padding: 16px; } }
+</style>
+</head>
+<body>
+
+<h1>🛡️ Agent 审计仪表盘 <span class="live" id="liveDot" title="实时连接"></span></h1>
+<p class="subtitle">v2 · 决策追溯 · 时间线 · 实时推送 · 趋势分析 <span id="updateTime" style="font-size:10px;color:var(--text-muted)"></span></p>
+
+<div class="stats" id="stats"><div class="stat-card" style="grid-column:1/-1"><div class="num"><div class="skeleton skeleton-line" style="width:60px;margin:0 auto"></div></div><div class="label">加载中...</div></div></div>
+
+<div class="charts">
+  <div class="chart-box">
+    <h3>📊 事件分类分布</h3>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <svg id="pieChart" viewBox="0 0 160 160" width="160" height="160"></svg>
+      <div class="pie-legend" id="pieLegend"></div>
+    </div>
+  </div>
+  <div class="chart-box">
+    <h3>📈 成功率趋势 (24h)</h3>
+    <svg class="trend-svg" id="trendChart" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-panel="timeline">⏱ 时间线</button>
+  <button class="tab" data-panel="table">📋 表格</button>
+</div>
+
+<div class="panel active" id="timeline">
+  <div class="controls">
+    <select id="tlCatFilter">
+      <option value="all">全部类型</option>
+      <option value="session">会话</option><option value="tool_call">工具调用</option>
+      <option value="decision">决策</option><option value="model_switch">模型切换</option>
+      <option value="recovery">恢复</option><option value="degradation">降级</option>
+      <option value="checkpoint">检查点</option><option value="error">错误</option>
+    </select>
+    <input type="text" id="tlSearch" placeholder="搜索事件...">
+    <span id="tlCount" style="font-size:10px;color:var(--text-muted)"></span>
+  </div>
+  <div class="timeline" id="timelineContent"><div class="empty-state"><div class="icon">⏳</div>加载中...</div></div>
+</div>
+
+<div class="panel" id="table">
+  <div class="controls">
+    <select id="tbCatFilter">
+      <option value="all">全部类型</option>
+      <option value="session">会话</option><option value="tool_call">工具调用</option>
+      <option value="decision">决策</option><option value="model_switch">模型切换</option>
+      <option value="recovery">恢复</option><option value="degradation">降级</option>
+      <option value="checkpoint">检查点</option><option value="error">错误</option>
+    </select>
+    <select id="tbResultFilter">
+      <option value="all">全部结果</option>
+      <option value="success">成功</option><option value="failure">失败</option><option value="degraded">降级</option><option value="recovered">已恢复</option>
+    </select>
+    <input type="text" id="tbSearch" placeholder="搜索...">
+  </div>
+  <div class="table-wrap"><table><thead><tr><th>时间</th><th>类型</th><th>动作</th><th>结果</th><th>耗时</th><th class="detail">详情</th></tr></thead><tbody id="tbBody"><tr><td colspan="6" class="empty-state">⏳ 加载中...</td></tr></tbody></table></div>
+</div>
+
+<div id="errorArea"></div>
+<div style="text-align:right;margin-top:8px;font-size:10px;color:var(--text-muted);" id="statusHint"></div>
+
+<script>
+// ═══════════════════════════════════
+// Agent 审计仪表盘 — v2 (Glass edition)
+// ═══════════════════════════════════
+const CAT_COLORS = {
+  session:'#3b82f6', tool_call:'#a78bfa', decision:'#f59e0b', model_switch:'#f97316',
+  recovery:'#22c55e', degradation:'#ef4444', checkpoint:'#6b7280', error:'#ef4444',
+};
+const CAT_NAMES = { session:'会话', tool_call:'工具', decision:'决策', model_switch:'模型', recovery:'恢复', degradation:'降级', checkpoint:'检查点', error:'错误' };
+
+let allEvents = [], stats = null;
+
+async function loadAll() {
+  const r = await fetch('/api/audit'); const d = await r.json();
+  allEvents = d.events || d; return allEvents;
+}
+async function loadStats() {
+  const r = await fetch('/api/audit/stats'); stats = await r.json(); return stats;
+}
+
+function connectSSE() {
+  const es = new EventSource('/api/audit/stream');
+  es.onmessage = e => { try { const d = JSON.parse(e.data); if (d.type === 'update') { stats = d.stats; loadAll().then(() => renderAll()); } } catch {} };
+  es.onerror = () => { document.getElementById('liveDot').style.background = '#ef4444'; };
+  es.onopen = () => { document.getElementById('liveDot').style.background = '#22c55e'; };
+}
+
+function renderStats() {
+  if (!stats) return;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-card"><div class="num" style="color:var(--blue)">${stats.total}</div><div class="label">总事件</div></div>
+    <div class="stat-card"><div class="num" style="color:var(--green)">${stats.byResult?.success||0}</div><div class="label">成功</div></div>
+    <div class="stat-card"><div class="num" style="color:var(--red)">${stats.byResult?.failure||0}</div><div class="label">失败</div></div>
+    <div class="stat-card"><div class="num" style="color:var(--yellow)">${stats.byResult?.degraded||0}</div><div class="label">降级</div></div>
+    <div class="stat-card"><div class="num" style="background:linear-gradient(135deg,var(--green),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent">${stats.successRate}%</div><div class="label">成功率</div></div>
+    <div class="stat-card"><div class="num" style="color:var(--text)">${Object.keys(stats.byCategory||{}).length}</div><div class="label">事件类型</div></div>
+    <div class="stat-card"><div class="num" style="color:var(--text)">${stats.avgDurationMs}<span style="font-size:14px">ms</span></div><div class="label">平均耗时</div></div>
+  `;
+}
+
+function renderPie() {
+  if (!stats?.byCategory) return;
+  const entries = Object.entries(stats.byCategory).filter(([k]) => k !== 'null' && k !== '');
+  const total = entries.reduce((s,[,v]) => s+v, 0);
+  if (!total) return;
+  const svg = document.getElementById('pieChart');
+  const cx=80, cy=80, r=68;
+  let angle = -Math.PI/2, paths = '';
+  entries.forEach(([cat, count]) => {
+    const slice = (count/total) * 2 * Math.PI;
+    const x1 = cx + r * Math.cos(angle), y1 = cy + r * Math.sin(angle);
+    const x2 = cx + r * Math.cos(angle + slice), y2 = cy + r * Math.sin(angle + slice);
+    paths += `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${slice > Math.PI ? 1 : 0} 1 ${x2},${y2} Z" fill="${CAT_COLORS[cat]||'#555'}" opacity="0.85" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>`;
+    angle += slice;
+  });
+  // Center hole for donut effect
+  svg.innerHTML = paths + `<circle cx="${cx}" cy="${cy}" r="28" fill="var(--bg)" opacity="0.8"/>` + `<text x="${cx}" y="${cy+4}" text-anchor="middle" fill="var(--text-dim)" font-size="20" font-weight="700">${total}</text>`;
+  document.getElementById('pieLegend').innerHTML = entries.map(([cat, count]) =>
+    `<span><span class="pie-dot" style="background:${CAT_COLORS[cat]||'#555'}"></span>${CAT_NAMES[cat]||cat} ${count}</span>`
+  ).join('');
+}
+
+function renderTrend() {
+  if (!stats?.hourlyTrend?.length) return;
+  const svg = document.getElementById('trendChart');
+  const data = stats.hourlyTrend;
+  const W=400, H=120, pad=20, pw=W-pad*2, ph=H-pad*2;
+  const step = pw / (data.length - 1 || 1);
+  let g = '';
+  for (let p=0; p<=100; p+=25) {
+    const y = pad + ph * (1 - p/100);
+    g += `<line x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}" stroke="rgba(255,255,255,0.04)" stroke-width="0.5"/>`;
+    g += `<text x="${pad-4}" y="${y+3}" fill="#5c647a" font-size="8" text-anchor="end">${p}%</text>`;
+  }
+  // Gradient fill
+  let pts = '', fillPts = `${pad},${pad+ph} `;
+  data.forEach((d, i) => {
+    const x = pad + i * step;
+    const y = pad + ph * (1 - Math.min(d.rate, 100) / 100);
+    pts += `${x},${y} `;
+    fillPts += `${x},${y} `;
+    const color = d.rate >= 80 ? '#22c55e' : d.rate >= 50 ? '#f59e0b' : '#ef4444';
+    g += `<circle cx="${x}" cy="${y}" r="2.5" fill="${color}" opacity="0.8"/>`;
+  });
+  fillPts += `${pad+step*(data.length-1)},${pad+ph}`;
+  g += `<polygon points="${fillPts.trim()}" fill="url(#gradFill)" opacity="0.15"/>`;
+  g += `<polyline points="${pts.trim()}" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.8"/>`;
+  // Gradient def
+  svg.innerHTML = `<defs><linearGradient id="gradFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity="0.3"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>` + g;
+}
+
+function renderTimeline() {
+  const cf = document.getElementById('tlCatFilter').value;
+  const q = (document.getElementById('tlSearch')?.value || '').toLowerCase();
+  let e = allEvents;
+  if (cf !== 'all') e = e.filter(x => x.category === cf);
+  if (q) e = e.filter(x => (x.action||'').toLowerCase().includes(q) || (x.target||'').toLowerCase().includes(q));
+  e = e.slice(-40).reverse();
+  const c = document.getElementById('timelineContent');
+  document.getElementById('tlCount').textContent = `${e.length} 条`;
+  if (!e.length) { c.innerHTML = '<div class="empty-state"><div class="icon">📭</div>无匹配事件</div>'; return; }
+  c.innerHTML = e.map(x =>
+    `<div class="tl-item ${x.result}">
+      <div class="tl-time">${new Date(x.timestamp).toLocaleTimeString('zh-CN',{hour12:false})} · ${(x.sessionId||'-').slice(0,20)}</div>
+      <div class="tl-detail">
+        <span class="badge bg-${x.category}">${CAT_NAMES[x.category]||x.category}</span>
+        <strong>${esc(x.action)}</strong>
+        <span style="color:var(--text-muted);font-size:10px">→ ${esc(x.target||'-')}</span>
+        <span class="r-${x.result}">${x.result}</span>
+        ${x.meta?.durationMs ? `<span style="color:var(--text-muted);font-size:10px">${x.meta.durationMs}ms</span>` : ''}
+        ${x.meta?.errorMessage ? `<span style="color:var(--red);font-size:10px">⚠ ${esc(x.meta.errorMessage.slice(0,50))}</span>` : ''}
+      </div>
+    </div>`
+  ).join('');
+}
+
+function renderTable() {
+  const cat = document.getElementById('tbCatFilter').value;
+  const res = document.getElementById('tbResultFilter').value;
+  const q = (document.getElementById('tbSearch')?.value || '').toLowerCase();
+  let e = allEvents;
+  if (cat !== 'all') e = e.filter(x => x.category === cat);
+  if (res !== 'all') e = e.filter(x => x.result === res);
+  if (q) e = e.filter(x => (x.action||'').toLowerCase().includes(q) || (x.target||'').toLowerCase().includes(q));
+  e = e.slice(-100).reverse();
+  const body = document.getElementById('tbBody');
+  if (!e.length) { body.innerHTML = '<tr><td colspan="6" class="empty-state">📭 无匹配事件</td></tr>'; return; }
+  body.innerHTML = e.map(x =>
+    `<tr>
+      <td>${new Date(x.timestamp).toLocaleTimeString('zh-CN',{hour12:false})}</td>
+      <td><span class="badge bg-${x.category}">${CAT_NAMES[x.category]||x.category}</span></td>
+      <td>${esc(x.action)}</td>
+      <td class="r-${x.result}">${x.result}</td>
+      <td>${x.meta?.durationMs ? x.meta.durationMs+'ms' : '-'}</td>
+      <td class="detail">${x.meta?.errorMessage ? esc(x.meta.errorMessage.slice(0,60)) : esc(JSON.stringify(x.params||{}).slice(0,60))}</td>
+    </tr>`
+  ).join('');
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderAll() { renderStats(); renderPie(); renderTrend(); renderTimeline(); renderTable(); document.getElementById('updateTime').textContent = '更新: ' + new Date().toLocaleTimeString('zh-CN'); }
+
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById(t.dataset.panel).classList.add('active');
+}));
+
+['tlCatFilter','tlSearch','tbCatFilter','tbResultFilter','tbSearch'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener(id.includes('Search') ? 'input' : 'change', () => {
+    if (id.startsWith('tl')) renderTimeline(); else renderTable();
+  });
+});
+
+async function init() {
+  document.getElementById('errorArea').innerHTML = '';
+  try { await loadAll(); await loadStats(); } catch (err) {
+    document.getElementById('errorArea').innerHTML = '<div class="error-box">⚠️ API 连接失败, 尝试本地缓存...</div>';
+    const cached = localStorage.getItem('audit_data');
+    if (cached) { try { allEvents = JSON.parse(cached); } catch {} }
+  }
+  if (allEvents.length) localStorage.setItem('audit_data', JSON.stringify(allEvents));
+  renderAll(); connectSSE();
+}
+init();
+</script>
+</body>
+</html>

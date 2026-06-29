@@ -1,0 +1,142 @@
+*** Begin Patch
+*** Update File: D:\QClaw_Workspace\agent-system\src\server\agent-server.ts
+@@ -379,48 +379,97 @@
+  // API: POST /api/config — 更新配置（支持任意字段）
+  if (url === '/api/config' && isPost()) {
+    try {
+      const body = await readBody(req);
+-      const { model, callTimeoutMs, maxRetries, maxTokens, chatTimeoutMs } = JSON.parse(body);
++      const updates = JSON.parse(body);
+      
+      const configPath = path.resolve(__dirname, '..', '..', 'config', 'default.json');
+      const raw = fs.readFileSync(configPath, 'utf-8');
+      const currentConfig = JSON.parse(raw);
+      
++      // 记录变更
++      const changes: Record<string, any> = {};
++
++      // 处理 agent 相关配置
++      if (updates.agent) {
++        if (updates.agent.callTimeoutMs !== undefined) {
++          currentConfig.agent.callTimeoutMs = Math.max(60000, Number(updates.agent.callTimeoutMs));
++          changes.callTimeoutMs = currentConfig.agent.callTimeoutMs;
++        }
++        if (updates.agent.maxRetries !== undefined) {
++          currentConfig.agent.maxRetries = Number(updates.agent.maxRetries);
++          changes.maxRetries = currentConfig.agent.maxRetries;
++        }
++        if (updates.agent.debugLogging !== undefined) {
++          if (!currentConfig.agent) currentConfig.agent = {};
++          currentConfig.agent.debugLogging = Boolean(updates.agent.debugLogging);
++          changes.debugLogging = currentConfig.agent.debugLogging;
++          // 立即生效：更新 logger 级别
++          if (currentConfig.agent.debugLogging) {
++            logger.setLevel('debug');
++          } else {
++            const cfg = getConfig();
++            logger.setLevel(cfg.logging?.level || 'info');
++          }
++        }
++      }
++
++      // 处理 logging 相关配置
++      if (updates.logging) {
++        if (!currentConfig.logging) currentConfig.logging = {};
++        if (updates.logging.level !== undefined) {
++          currentConfig.logging.level = updates.logging.level;
++          changes.logLevel = updates.logging.level;
++          // 立即生效：更新 logger 级别
++          logger.setLevel(updates.logging.level);
++        }
++        if (updates.logging.maxFileSizeMB !== undefined) {
++          currentConfig.logging.maxFileSizeMB = Number(updates.logging.maxFileSizeMB);
++          changes.maxFileSizeMB = currentConfig.logging.maxFileSizeMB;
++          logger.setMaxFileSize(currentConfig.logging.maxFileSizeMB);
++        }
++        if (updates.logging.maxRotatedFiles !== undefined) {
++          currentConfig.logging.maxRotatedFiles = Number(updates.logging.maxRotatedFiles);
++          changes.maxRotatedFiles = currentConfig.logging.maxRotatedFiles;
++          logger.setMaxRotatedFiles(currentConfig.logging.maxRotatedFiles);
++        }
++      }
++
++      // 处理 models 相关配置
++      if (updates.models) {
++        if (updates.models.providers?.lmstudio?.model) {
++          if (!currentConfig.models) currentConfig.models = { providers: { lmstudio: {} } };
++          if (!currentConfig.models.providers) currentConfig.models.providers = { lmstudio: {} };
++          currentConfig.models.providers.lmstudio.model = updates.models.providers.lmstudio.model;
++          changes.model = updates.models.providers.lmstudio.model;
++        }
++        if (updates.models.providers?.lmstudio?.maxTokens !== undefined) {
++          if (!currentConfig.models) currentConfig.models = { providers: { lmstudio: {} } };
++          if (!currentConfig.models.providers) currentConfig.models.providers = { lmstudio: {} };
++          currentConfig.models.providers.lmstudio.maxTokens = Number(updates.models.providers.lmstudio.maxTokens);
++          changes.maxTokens = currentConfig.models.providers.lmstudio.maxTokens;
++        }
++      }
++
++      // 处理 server 相关配置（含 YAML 同步）
++      if (updates.server) {
++        if (updates.server.chatTimeoutMs !== undefined) {
++          const safeChatTimeoutMs = Math.max(60000, Number(updates.server.chatTimeoutMs));
++          if (!currentConfig.server) currentConfig.server = {};
++          currentConfig.server.chatTimeoutMs = safeChatTimeoutMs;
++          changes.chatTimeoutMs = safeChatTimeoutMs;
++          // 同步到 YAML
++          const yamlPath = path.resolve(__dirname, '..', '..', 'config', 'agent-system.yaml');
++          try {
++            const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
++            let updated = yamlContent;
++            if (/chatTimeoutMs:\s*\d+/.test(updated)) {
++              updated = updated.replace(/chatTimeoutMs:\s*\d+/, `chatTimeoutMs: ${safeChatTimeoutMs}`);
++            } else {
++              updated += `\nserver:\n  chatTimeoutMs: ${safeChatTimeoutMs}\n`;
++            }
++            fs.writeFileSync(yamlPath, updated, 'utf-8');
++          } catch (e) {
++            logger.warn('[AgentServer] 更新 chatTimeoutMs 到 YAML 失败', e);
++          }
++        }
++      }
++
+-      if (model) currentConfig.models.providers.lmstudio.model = model;
+-      // 强制最小超时 60 秒
+-      if (callTimeoutMs) currentConfig.agent.callTimeoutMs = Math.max(60000, Number(callTimeoutMs));
+-      if (maxRetries !== undefined) currentConfig.agent.maxRetries = Number(maxRetries);
+-      if (maxTokens) currentConfig.models.providers.lmstudio.maxTokens = Number(maxTokens);
+-      if (chatTimeoutMs) {
+-        const safeChatTimeoutMs = Math.max(60000, Number(chatTimeoutMs));
+-        // 同时写入 JSON 和 YAML，避免服务重启后丢失
+-        if (!currentConfig.server) currentConfig.server = {};
+-        currentConfig.server.chatTimeoutMs = safeChatTimeoutMs;
+-        const yamlPath = path.resolve(__dirname, '..', '..', 'config', 'agent-system.yaml');
+-        try {
+-          const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
+-          let updated = yamlContent;
+-          if (/chatTimeoutMs:\s*\d+/.test(updated)) {
+-            updated = updated.replace(/chatTimeoutMs:\s*\d+/, `chatTimeoutMs: ${safeChatTimeoutMs}`);
+-          } else {
+-            updated += `\nserver:\n  chatTimeoutMs: ${safeChatTimeoutMs}\n`;
+-          }
+-          fs.writeFileSync(yamlPath, updated, 'utf-8');
+-        } catch (e) {
+-          logger.warn('[AgentServer] 更新 chatTimeoutMs 到 YAML 失败', e);
+-        }
+-      }
+-
+      fs.writeFileSync(configPath, JSON.stringify(currentConfig, null, 2), 'utf-8');
+
+      // 同步更新内存中的配置，使 GET /api/config 立即反映更改
+      loadConfig();
+      
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+-      res.end(JSON.stringify({ ok: true, message: '配置已更新，重启后生效', changes: { model, callTimeoutMs: currentConfig.agent.callTimeoutMs, maxRetries, maxTokens, chatTimeoutMs } }));
++      res.end(JSON.stringify({ ok: true, message: '配置已更新，部分配置立即生效', changes }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+*** End Patch

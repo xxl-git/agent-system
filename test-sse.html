@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SSE Test</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #0f0; }
+    .event { margin: 10px 0; padding: 10px; border: 1px solid #333; background: #222; }
+    .type { color: #ff6b6b; font-weight: bold; }
+    .payload { color: #4ecdc4; }
+    pre { white-space: pre-wrap; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>SSE Event Stream Test</h1>
+  <div id="log"></div>
+  
+  <script>
+    const log = document.getElementById('log');
+    const es = new EventSource('http://127.0.0.1:19701/api/events');
+    
+    es.onopen = () => {
+      log.innerHTML += '<div class="event">✅ SSE Connected</div>';
+    };
+    
+    es.onerror = (e) => {
+      log.innerHTML += '<div class="event">❌ SSE Error: ' + JSON.stringify(e) + '</div>';
+    };
+    
+    es.onmessage = (e) => {
+      try {
+        const d = JSON.parse(e.data);
+        const div = document.createElement('div');
+        div.className = 'event';
+        
+        if (d.type === 'model_payload') {
+          div.innerHTML = `<span class="type">${d.type}</span><br>
+            Model: ${d.model}<br>
+            Messages: ${d.messageCount}<br>
+            System: ${(d.systemPromptLen/1000).toFixed(1)}k chars<br>
+            User: ${(d.userPromptLen/1000).toFixed(1)}k chars<br>
+            <pre class="payload">${JSON.stringify(d.messages?.slice(0,2), null, 2)}...</pre>`;
+        } else if (d.type === 'agent_status') {
+          div.innerHTML = `<span class="type">${d.type}</span> | ${d.status} | ${d.detail || ''}`;
+        } else {
+          div.innerHTML = `<span class="type">${d.type}</span><pre>${JSON.stringify(d, null, 2)}</pre>`;
+        }
+        
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+      } catch (err) {
+        log.innerHTML += `<div class="event">Parse error: ${err}</div>`;
+      }
+    };
+  </script>
+</body>
+</html>

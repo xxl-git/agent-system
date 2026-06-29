@@ -1,0 +1,245 @@
+{
+  "modelName": "qwen/qwen3.5-9b",
+  "capability": {
+    "modelName": "qwen/qwen3.5-9b",
+    "probedAt": "2026-06-18T13:53:53.697Z",
+    "results": [
+      {
+        "probeId": "tool_basic",
+        "category": "tool_calling",
+        "passed": false,
+        "durationMs": 30006,
+        "response": "",
+        "error": "Probe timeout: tool_basic"
+      },
+      {
+        "probeId": "tool_empty_loop",
+        "category": "tool_calling",
+        "passed": false,
+        "durationMs": 30014,
+        "response": "",
+        "error": "Probe timeout: tool_empty_loop"
+      },
+      {
+        "probeId": "json_simple",
+        "category": "json_output",
+        "passed": false,
+        "durationMs": 30001,
+        "response": "",
+        "error": "Probe timeout: json_simple"
+      },
+      {
+        "probeId": "json_complex",
+        "category": "json_output",
+        "passed": false,
+        "durationMs": 30002,
+        "response": "",
+        "error": "Probe timeout: json_complex"
+      },
+      {
+        "probeId": "reasoning_logic",
+        "category": "reasoning",
+        "passed": false,
+        "durationMs": 30009,
+        "response": "",
+        "error": "Probe timeout: reasoning_logic"
+      },
+      {
+        "probeId": "context_8k",
+        "category": "context",
+        "passed": false,
+        "durationMs": 30007,
+        "response": "",
+        "error": "Probe timeout: context_8k"
+      },
+      {
+        "probeId": "stability_repeat",
+        "category": "stability",
+        "passed": false,
+        "durationMs": 30001,
+        "response": "",
+        "error": "Probe timeout: stability_repeat"
+      }
+    ],
+    "scores": {
+      "tool_calling": {
+        "category": "tool_calling",
+        "score": 0,
+        "passed": 0,
+        "total": 2,
+        "criticalFailed": true
+      },
+      "json_output": {
+        "category": "json_output",
+        "score": 0,
+        "passed": 0,
+        "total": 2,
+        "criticalFailed": false
+      },
+      "reasoning": {
+        "category": "reasoning",
+        "score": 0,
+        "passed": 0,
+        "total": 1,
+        "criticalFailed": false
+      },
+      "context": {
+        "category": "context",
+        "score": 0,
+        "passed": 0,
+        "total": 1,
+        "criticalFailed": false
+      },
+      "stability": {
+        "category": "stability",
+        "score": 0,
+        "passed": 0,
+        "total": 1,
+        "criticalFailed": false
+      }
+    },
+    "overallScore": 0,
+    "recommendations": [
+      "工具调用不稳定，建议禁用 parallelToolCalls",
+      "JSON 输出不稳定，建议使用 structured prompt wrapper",
+      "建议分块发送长上下文"
+    ],
+    "warnings": [
+      "工具调用能力弱，考虑纯文本降级模式",
+      "8K 上下文测试失败，可能上下文窗口较小"
+    ],
+    "stage": "probing",
+    "strategy": {
+      "maxTools": 0,
+      "useCoT": true,
+      "maxTokens": 1024,
+      "temperature": 0.3,
+      "parallelToolCalls": false,
+      "retryOnToolError": false,
+      "promptWrapper": "verbose"
+    }
+  },
+  "behavior": {
+    "maxTools": 0,
+    "useCoT": true,
+    "maxTokens": 1024,
+    "temperature": 0.3,
+    "parallelToolCalls": false,
+    "retryOnToolError": false,
+    "promptWrapper": "verbose"
+  },
+  "interactionHistory": [
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 60018,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-18T13:53:43.539Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 121023,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-18T13:56:34.828Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 19999,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-18T13:59:23.948Z"
+    },
+    {
+      "taskType": "task",
+      "success": true,
+      "durationMs": 49333,
+      "toolCalls": 2,
+      "toolErrors": 0,
+      "timestamp": "2026-06-18T14:06:48.720Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 8714,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-18T14:11:14.043Z"
+    },
+    {
+      "taskType": "query",
+      "success": true,
+      "durationMs": 54681,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-18T14:31:40.918Z"
+    },
+    {
+      "taskType": "query",
+      "success": true,
+      "durationMs": 19833,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-18T14:34:30.196Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 39658,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-18T14:37:16.197Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 121030,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-18T17:31:11.838Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 60006,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-18T17:36:02.705Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 55562,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-19T16:43:12.803Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 99486,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-19T16:52:02.536Z"
+    }
+  ],
+  "stats": {
+    "totalInteractions": 12,
+    "successRate": 1,
+    "avgDurationMs": 59111.916666666664,
+    "toolErrorRate": 0,
+    "lastUsed": "2026-06-19T16:52:02.536Z",
+    "preferredTasks": [
+      "chat",
+      "task",
+      "query",
+      "unknown"
+    ]
+  },
+  "stage": "learning",
+  "createdAt": "2026-06-18T05:10:51.098Z",
+  "updatedAt": "2026-06-19T16:52:02.536Z"
+}

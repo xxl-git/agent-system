@@ -1,0 +1,17 @@
+{
+  "name": "weather",
+  "version": "1.0.0",
+  "description": "查询城市天气预报（模拟数据，可接入真实API）",
+  "author": "system",
+  "dangerLevel": "safe",
+  "capabilities": [
+    { "name": "weather_query", "description": "查询指定城市7天天气预报", "inputType": "text", "outputType": "markdown" }
+  ],
+  "dependencies": [],
+  "triggers": ["天气", "weather", "气温", "下雨", "晴天"],
+  "createdAt": "2026-06-17T08:00:00.000Z",
+  "updatedAt": "2026-06-17T08:00:00.000Z",
+  "stats": { "totalCalls": 0, "successCalls": 0, "failCalls": 0, "avgDurationMs": 0 },
+  "status": "active",
+  "entry": "../../skills/weather/index.js"
+}

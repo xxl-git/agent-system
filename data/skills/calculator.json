@@ -1,0 +1,17 @@
+{
+  "name": "calculator",
+  "version": "1.0.0",
+  "description": "安全数学表达式计算器",
+  "author": "system",
+  "dangerLevel": "safe",
+  "capabilities": [
+    { "name": "math_eval", "description": "安全计算数学表达式（仅数字和基本运算符）", "inputType": "text", "outputType": "text" }
+  ],
+  "dependencies": [],
+  "triggers": ["计算", "calculate", "算", "math", "等于"],
+  "createdAt": "2026-06-17T08:00:00.000Z",
+  "updatedAt": "2026-06-17T08:00:00.000Z",
+  "stats": { "totalCalls": 0, "successCalls": 0, "failCalls": 0, "avgDurationMs": 0 },
+  "status": "active",
+  "entry": "../../skills/calculator/index.js"
+}
