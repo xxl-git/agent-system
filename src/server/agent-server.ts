@@ -249,7 +249,19 @@ const server = http.createServer(async (req, res) => {
       const config = getConfig();
       const logDir = (config.logging as any)?.dir || './logs';
       const fullPath = path.resolve(process.cwd(), logDir);
-      let filePath = path.join(fullPath, `${date}.log`);
+      // 路径安全验证：防止路径穿越攻击
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Invalid date format. Expected YYYY-MM-DD.' }));
+        return;
+      }
+      const resolved = path.resolve(fullPath, `${date}.log`);
+      if (!resolved.startsWith(fullPath)) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Path traversal detected.' }));
+        return;
+      }
+      let filePath = resolved;
       let content = '';
       if (fs.existsSync(filePath)) {
         content = fs.readFileSync(filePath, 'utf-8');
@@ -480,29 +492,45 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readBody(req);
       const { model, callTimeoutMs, maxRetries, maxTokens, chatTimeoutMs } = JSON.parse(body);
-      
+
+      // 参数校验：拒绝负数和 NaN
+      const validatedTimeout = (v: unknown, name: string, min: number, max: number): number | null => {
+        if (v === undefined || v === null) return null;
+        const n = Number(v);
+        if (!Number.isFinite(n) || n < min || n > max) {
+          throw new Error(`Invalid ${name}: ${v} (must be ${min}-${max})`);
+        }
+        return Math.floor(n);
+      };
+
       const configPath = path.resolve(__dirname, '..', '..', 'config', 'default.json');
       const raw = fs.readFileSync(configPath, 'utf-8');
       const currentConfig = JSON.parse(raw);
 
       if (model) currentConfig.models.providers.lmstudio.model = model;
-      if (callTimeoutMs) currentConfig.agent.callTimeoutMs = Number(callTimeoutMs);
-      if (maxRetries !== undefined) currentConfig.agent.maxRetries = Number(maxRetries);
-      if (maxTokens) currentConfig.models.providers.lmstudio.maxTokens = Number(maxTokens);
-      if (chatTimeoutMs) {
-        // 写入 YAML 配置的 server 段
-        const yamlPath = path.resolve(__dirname, '..', '..', 'config', 'agent-system.yaml');
-        try {
-          const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
-          let updated = yamlContent;
-          if (/chatTimeoutMs:\s*\d+/.test(updated)) {
-            updated = updated.replace(/chatTimeoutMs:\s*\d+/, `chatTimeoutMs: ${Number(chatTimeoutMs)}`);
-          } else {
-            updated += `\nserver:\n  chatTimeoutMs: ${Number(chatTimeoutMs)}\n`;
+      const vTimeout = validatedTimeout(callTimeoutMs, 'callTimeoutMs', 1000, 3600000);
+      if (vTimeout !== null) currentConfig.agent.callTimeoutMs = vTimeout;
+      const vRetries = validatedTimeout(maxRetries, 'maxRetries', 0, 100);
+      if (vRetries !== null) currentConfig.agent.maxRetries = vRetries;
+      const vTokens = validatedTimeout(maxTokens, 'maxTokens', 1, 100000);
+      if (vTokens !== null) currentConfig.models.providers.lmstudio.maxTokens = vTokens;
+      if (chatTimeoutMs !== undefined) {
+        const vChatTimeout = validatedTimeout(chatTimeoutMs, 'chatTimeoutMs', 5000, 3600000);
+        if (vChatTimeout !== null) {
+          // 写入 YAML 配置的 server 段
+          const yamlPath = path.resolve(__dirname, '..', '..', 'config', 'agent-system.yaml');
+          try {
+            const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
+            let updated = yamlContent;
+            if (/chatTimeoutMs:\s*\d+/.test(updated)) {
+              updated = updated.replace(/chatTimeoutMs:\s*\d+/, `chatTimeoutMs: ${vChatTimeout}`);
+            } else {
+              updated += `\nserver:\n  chatTimeoutMs: ${vChatTimeout}\n`;
+            }
+            fs.writeFileSync(yamlPath, updated, 'utf-8');
+          } catch (e) {
+            logger.warn('[AgentServer] 更新 chatTimeoutMs 到 YAML 失败', e);
           }
-          fs.writeFileSync(yamlPath, updated, 'utf-8');
-        } catch (e) {
-          logger.warn('[AgentServer] 更新 chatTimeoutMs 到 YAML 失败', e);
         }
       }
 
