@@ -106,10 +106,12 @@ export class Orchestrator extends EventEmitter {
         logger.info(`[Orchestrator] 📂 项目 ${activeProject.project} 有检查点，从步骤 ${activeProject.checkpoint.lastSubtask} 继续`);
       }
 
+      const dagT0 = Date.now();
       const dag = await this.decomposer.decompose(
         rawMessage,
         toolRegistry.listNames()
       );
+      logger.info(`[Orchestrator] ├─ decompose() 完成 (${Date.now() - dagT0}ms): ${dag.tasks.length} 个子任务, ${dag.parallelGroups.length} 个并行组`);
 
       this.taskHistory.push(dag);
       this.emit('tasks:planned', dag);
@@ -297,16 +299,25 @@ ${remainingSteps || '(无)'}
   }
 
   private async executeTask(task: SubTask): Promise<{ task: SubTask; result: ToolResult }> {
+    const t0 = Date.now();
     task.status = 'running';
-    logger.info(`[Orchestrator] 执行任务: ${task.title}`);
+    logger.info(`[Orchestrator] ▶ executeTask() id=${task.id} title="${task.title}" tool=${task.tool || 'none'} status=running`);
 
     if (task.tool && task.toolArgs) {
+      logger.debug(`[Orchestrator]   └─ 工具参数: ${JSON.stringify(task.toolArgs).slice(0, 200)}`);
       for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
+        const toolT0 = Date.now();
         const result = await toolRegistry.call(task.tool, task.toolArgs);
+        const toolDur = Date.now() - toolT0;
+        if (result.success) {
+          logger.info(`[Orchestrator] ✓ executeTask() id=${task.id} ✅ 成功 (${toolDur}ms) output=${result.output?.toString().slice(0, 100) || ''}`);
+        } else {
+          logger.warn(`[Orchestrator] ✗ executeTask() id=${task.id} ❌ 失败 (${toolDur}ms): ${result.error?.slice(0, 100)}`);
+        }
         if (result.success || attempt === this.config.maxRetries) {
           return { task, result };
         }
-        logger.warn(`[Orchestrator] 重试 ${attempt + 1}/${this.config.maxRetries}: ${task.title}`);
+        logger.warn(`[Orchestrator]   └─ 重试 ${attempt + 1}/${this.config.maxRetries}: ${task.title}`);
       }
     }
 
