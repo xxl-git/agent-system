@@ -52,7 +52,20 @@ export class LLMRouter {
     }
 
     // 调用底层适配器
-    return this.adapter.chat(messages);
+    const t0 = Date.now();
+    try {
+      const response = await this.adapter.chat(messages);
+      const dur = Date.now() - t0;
+      const content = response.choices?.[0]?.message?.content;
+      const systemLen = messages.filter(m => m.role === 'system').reduce((a, m) => a + (m.content?.length || 0), 0);
+      const userLen = messages.filter(m => m.role === 'user').reduce((a, m) => a + (m.content?.length || 0), 0);
+      logger.info(`[LLMRouter] └─ ${taskType} 响应 ${content ? content.length : 0}字 (${dur}ms) msgs=${messages.length} sys=${systemLen}usr=${userLen} model=${this.adapter.model}`);
+      return response;
+    } catch (err) {
+      const dur = Date.now() - t0;
+      logger.error(`[LLMRouter] ✗ ${taskType} 调用失败 (${dur}ms): ${(err as Error).message}`);
+      throw err;
+    }
   }
 
   /** 带默认参数的快捷方法 */

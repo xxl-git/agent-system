@@ -6,9 +6,11 @@ import { logger } from '../logger';
 import { getContextManager } from '../core/context-manager';
 
 // 动态读取 package.json 版本
-let _cachedVersion: string | null = null;
+let _cachedVersion: string = '0.9.2';
+let _versionLoaded = false;
 function getAgentVersion(): string {
-  if (_cachedVersion) return _cachedVersion;
+  if (_versionLoaded) return _cachedVersion;
+  _versionLoaded = true;
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
     _cachedVersion = pkg.version || '0.9.2';
@@ -424,6 +426,7 @@ export function getFullDashboard(agent?: any): any {
     uptime: process.uptime(),
     projects: getProjectsSummary(),
     skills: getSkillsSummary(),
+    tools: getToolsSummary(agent),
     models: getModelSummary(agent),
     health: getHealthSummary(agent),
     memory: getMemorySummary(agent),
