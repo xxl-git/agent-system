@@ -388,43 +388,57 @@ class AgentCore {
         }
     };
     async sendMessage(userInput) {
+        const t0 = Date.now();
         this.messages.push({ role: 'user', content: userInput });
-        logger.info('User: ' + userInput.slice(0, 80));
+        logger.info(`[Agent] ┌─ sendMessage() 输入(${userInput.length}字): ${userInput.slice(0, 100)}`);
         // 事件总线：开始 pipeline
         agentEventBus.startSession(3);
+
         // 快速通道：/ 开头的命令跳过 LLM 意图解析
         if (userInput.startsWith('/')) {
+            logger.info('[Agent] │ └─ 路由: /命令 → handleCommand()');
             const reply = await this.handleCommand(userInput);
+            const dur = Date.now() - t0;
             this.messages.push({ role: 'assistant', content: reply });
+            logger.info(`[Agent] └─ sendMessage() 完成 (${dur}ms) 回复${reply.length}字`);
             agentEventBus.endSession(true, '命令完成');
             return reply;
         }
+
         // 注意：/ 命令快速通道不走 recordInteraction / audit / breakIn 评估
         // 这是设计使然 — 简单查询不需要写入记忆系统。
         let intent;
+        const intentT0 = Date.now();
         if (this.config.agent.skipIntentParsing) {
             // 跳过意图解析（减少一次 LLM 调用，直接路由到聊天）
             intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.5, needsClarification: false, missingInfo: [] };
-            logger.debug('[Agent] 意图解析已跳过，直接路由到聊天');
+            logger.debug(`[Agent] │ └─ 意图解析已跳过 (skipIntentParsing=true)`);
         } else {
             try {
                 intent = await this.intentParser.parse(userInput);
+                logger.info(`[Agent] │ ├─ 意图解析完成 (${Date.now() - intentT0}ms): type=${intent.type} confidence=${intent.confidence} entities=[${(intent.entities || []).map((e: any) => e.name || e).join(', ')}]`);
             }
-            catch {
+            catch (err: any) {
                 intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.3, needsClarification: false, missingInfo: [] };
+                logger.warn(`[Agent] │ ├─ 意图解析失败: ${err.message}，降级为 unknown`);
             }
         }
+
         // 事件总线：意图已确定
         agentEventBus.stepDone(1, 'intent_ready', '意图: ' + (intent.type || 'unknown'));
         if (intent.needsClarification && intent.missingInfo.length > 0) {
-            const msg = 'Not enough info:\n' + intent.missingInfo.map((i) => '  - ' + i).join('\n');
+            const msg = 'Not enough info:\n' + intent.missingInfo.map((i: string) => '  - ' + i).join('\n');
             this.messages.push({ role: 'assistant', content: msg });
             this.recordInteraction(userInput, msg);
+            logger.info(`[Agent] └─ sendMessage() 完成 (${Date.now() - t0}ms) [需要澄清]`);
             agentEventBus.endSession(true, '需要澄清');
             return msg;
         }
+
         let reply;
         const start = Date.now();
+        const routeLabel = intent.type === 'command' ? 'handleCommand()' : intent.type === 'task' ? `handleTask() intent.confidence=${intent.confidence}` : 'handleChat()';
+        logger.info(`[Agent] │ └─ 路由: ${routeLabel}`);
         switch (intent.type) {
             case 'command':
                 reply = await this.handleCommand(userInput);
@@ -438,6 +452,7 @@ class AgentCore {
         }
         const duration = Date.now() - start;
         this.messages.push({ role: 'assistant', content: reply });
+        logger.info(`[Agent] │ ├─ handler 完成 (${duration}ms) 回复${reply.length}字`);
         this.recordInteraction(userInput, reply);
         const isError = reply.startsWith('ERR') || reply.startsWith('WARN');
         this.breakIn.evaluateInteraction({
@@ -464,15 +479,21 @@ class AgentCore {
                 logger.debug('[Agent] 经验提取失败（非阻塞）', err);
             });
         }
+        const totalDur = Date.now() - t0;
+        logger.info(`[Agent] └─ sendMessage() 完成 (${totalDur}ms) [${intent.type}] ${isError ? '❌' : '✅'} 回复${reply.length}字`);
         return reply;
     }
     async handleChat(userInput) {
+        const t0 = Date.now();
+        logger.info(`[Agent] ┌─ handleChat() 输入(${userInput.length}字)`);
         this.nonsenseDetector.markConversationStart(userInput);
         let chatOutput = '';
         let chatError = null;
         try {
             const result = await this.recovery.executeProtected(async () => {
+                const aliveT0 = Date.now();
                 const alive = await this.adapter.ping();
+                logger.debug(`[Agent] │ ├─ ping() ${alive ? '✅' : '❌'} (${Date.now() - aliveT0}ms)`);
                 this.sessionDiag.recordPing(alive);
                 if (!alive) {
                     this.healthMon.recordPing(false);
@@ -547,12 +568,16 @@ class AgentCore {
                         ` hasSummary=${assembled.metadata.hasSummary}`,
                     );
                     // LLM Router 统一调用：自动广播 payload（附加组装元数据）
+                    const llmT0 = Date.now();
                     const response = await llm_router_1.getLLMRouter().call({
                         taskType: 'chat',
                         messages: assembled.messages,
                         metadata: { assembler: assembled.metadata },
                     });
-                    return response.choices?.[0]?.message?.content ?? '(empty)';
+                    const llmDur = Date.now() - llmT0;
+                    const content = response.choices?.[0]?.message?.content;
+                    logger.info(`[Agent] │ ├─ LLM chat() 响应 ${content ? content.length : 0}字 (${llmDur}ms)`);
+                    return content ?? '(empty)';
                 }
                 finally {
                     this.healthMon.endTokenStream();
@@ -571,6 +596,7 @@ class AgentCore {
         if (!normal) {
             logger.warn(`[Nonsense] handleChat 检测到异常: ${reason || chatError}`);
         }
+        logger.info(`[Agent] └─ handleChat() 完成 (${Date.now() - t0}ms) 回复${chatOutput.length}字${chatError ? ' ❌' : ''}`);
         return chatOutput;
     }
     /**
@@ -579,28 +605,33 @@ class AgentCore {
      * 返回完整回复字符串
      */
     async sendMessageStream(userInput) {
+        const t0 = Date.now();
         this.messages.push({ role: 'user', content: userInput });
-        logger.info('User (stream): ' + userInput.slice(0, 80));
+        logger.info(`[Agent] ┌─ sendMessageStream() 输入(${userInput.length}字): ${userInput.slice(0, 100)}`);
         // 事件总线：开始 pipeline
         agentEventBus.startSession(3);
         // 快速通道：/ 开头的命令跳过 LLM 意图解析（非流式）
         if (userInput.startsWith('/')) {
+            logger.info('[Agent] │ └─ 路由: /命令 → handleCommand()');
             const reply = await this.handleCommand(userInput);
             this.messages.push({ role: 'assistant', content: reply });
+            logger.info(`[Agent] └─ sendMessageStream() 完成 (${Date.now() - t0}ms) 回复${reply.length}字`);
             agentEventBus.endSession(true, '命令完成');
             return reply;
         }
         let intent;
+        const intentT0 = Date.now();
         if (this.config.agent.skipIntentParsing) {
             // 跳过意图解析（减少一次 LLM 调用，直接路由到聊天）
             intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.5, needsClarification: false, missingInfo: [] };
-            logger.debug('[Agent] 意图解析已跳过 (stream)，直接路由到聊天');
+            logger.debug(`[Agent] │ └─ 意图解析已跳过 (skipIntentParsing=true)`);
         } else {
             try {
                 intent = await this.intentParser.parse(userInput);
-            }
-            catch {
+                logger.info(`[Agent] │ ├─ 意图解析完成 (${Date.now() - intentT0}ms): type=${intent.type} confidence=${intent.confidence}`);
+            } catch (err: any) {
                 intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.3, needsClarification: false, missingInfo: [] };
+                logger.warn(`[Agent] │ ├─ 意图解析失败: ${err.message}，降级为 unknown`);
             }
         }
         agentEventBus.stepDone(1, 'intent_ready', '意图: ' + (intent.type || 'unknown'));
@@ -612,7 +643,9 @@ class AgentCore {
             return msg;
         }
         let reply;
-        const t0 = Date.now();
+        const t0Stream = Date.now();
+        const routeLabel = intent.type === 'command' ? 'handleCommand()' : intent.type === 'task' ? `handleTask() intent.confidence=${intent.confidence}` : 'handleChatStream()';
+        logger.info(`[Agent] │ └─ 路由: ${routeLabel}`);
         switch (intent.type) {
             case 'command':
                 reply = await this.handleCommand(userInput);
@@ -649,6 +682,9 @@ class AgentCore {
                 logger.debug('[Agent] 经验提取失败（非阻塞）', err);
             });
         }
+        const totalDur = Date.now() - t0;
+        const streamIsError = reply.startsWith('ERR') || reply.startsWith('WARN');
+        logger.info(`[Agent] └─ sendMessageStream() 完成 (${totalDur}ms) [${intent.type}] ${streamIsError ? '❌' : '✅'} 回复${reply.length}字`);
         return reply;
     }
     /**
@@ -656,13 +692,17 @@ class AgentCore {
      * 逐 chunk 通过 agentEventBus.emitChatChunk() 广播
      */
     async handleChatStream(userInput) {
+        const t0 = Date.now();
+        logger.info(`[Agent] ┌─ handleChatStream() 输入(${userInput.length}字)`);
         this.nonsenseDetector.markConversationStart(userInput);
         let chatOutput = '';
         let chatError = null;
         const streamStartTime = Date.now();
         try {
             chatOutput = await this.recovery.executeProtected(async () => {
+                const aliveT0 = Date.now();
                 const alive = await this.adapter.ping();
+                logger.debug(`[Agent] │ ├─ ping() ${alive ? '✅' : '❌'} (${Date.now() - aliveT0}ms)`);
                 this.sessionDiag.recordPing(alive);
                 if (!alive) {
                     this.healthMon.recordPing(false);
@@ -760,14 +800,19 @@ class AgentCore {
         if (!normal) {
             logger.warn(`[Nonsense] handleChatStream 检测到异常: ${reason || chatError}`);
         }
+        logger.info(`[Agent] └─ handleChatStream() 完成 (${Date.now() - t0}ms) 回复${chatOutput.length}字${chatError ? ' ❌' : ''}`);
         return chatOutput;
     }
     async handleTask(intent, rawMessage) {
+        const t0 = Date.now();
+        logger.info(`[Agent] ┌─ handleTask() intent.confidence=${intent.confidence} summary=${intent.summary}`);
         this.nonsenseDetector.markConversationStart(rawMessage);
         let taskOutput = '';
         let taskError = null;
         try {
+            const aliveT0 = Date.now();
             const alive = await this.adapter.ping();
+            logger.debug(`[Agent] │ ├─ ping() ${alive ? '✅' : '❌'} (${Date.now() - aliveT0}ms)`);
             this.sessionDiag.recordPing(alive);
             if (!alive) {
                 this.healthMon.recordPing(false);
@@ -778,6 +823,7 @@ class AgentCore {
                 return taskOutput;
             }
             if (this.isMultiAgentTask(rawMessage)) {
+                logger.info('[Agent] │ └─ 检测为多Agent任务 → handleMultiAgentTask()');
                 taskOutput = await this.handleMultiAgentTask(intent, rawMessage);
                 this.nonsenseDetector.markConversationEnd(true, rawMessage, taskOutput);
                 return taskOutput;
@@ -808,7 +854,9 @@ class AgentCore {
             const result = await this.recovery.executeProtected(async () => {
                 this.healthMon.watchTokenStream();
                 try {
+                    const orchT0 = Date.now();
                     const output = await this.orchestrator.execute(intent, rawMessage, taskId);
+                    logger.info(`[Agent] │ ├─ orchestrator.execute() 完成 (${Date.now() - orchT0}ms)`);
                     const proj = this.projectManager.getActiveProject();
                     if (proj)
                         this.projectManager.recalculateProgress(proj.project);
@@ -831,6 +879,7 @@ class AgentCore {
         if (!normal) {
             logger.warn(`[Nonsense] handleTask 检测到异常: ${reason || taskError}`);
         }
+        logger.info(`[Agent] └─ handleTask() 完成 (${Date.now() - t0}ms) 回复${taskOutput.length}字${taskError ? ' ❌' : ''}`);
         return taskOutput;
     }
     isMultiAgentTask(input) {
@@ -852,9 +901,11 @@ class AgentCore {
         return 'multi-agent done (' + result.mode + ', ' + result.totalDurationMs + 'ms)\n' + result.merged.summary;
     }
     async handleCommand(input) {
+        const t0 = Date.now();
         const cmd = input.slice(1).toLowerCase().trim();
         const args = cmd.split(/\s+/);
         const action = args[0];
+        logger.info(`[Agent] ┌─ handleCommand() action=${action} args=${JSON.stringify(args.slice(1))}`);
         switch (action) {
             case 'exit':
             case 'quit':
@@ -933,8 +984,11 @@ class AgentCore {
             case 'pause':
                 return this.handlePauseCommand(args.slice(1));
             case 'help':
+                logger.info(`[Agent] └─ handleCommand() 完成 (${Date.now() - t0}ms) [help]`);
                 return 'Commands:\n  /exit /history /status /project\n  /models [list|scan|switch|detail] — 模型探测与切换\n  /router /skills /agents\n  /resilience /audit /summarize\n  /memory /context /idle /diag /nonsense /config\n  /exp [add|list|view|search|edit|delete|stats|help]\n  /resume [index|taskId] — 恢复长任务\n  /ckpt [list|show|clear] — 检查点管理\n  /pause — 暂停当前任务\n  /help';
-            default: return 'Unknown: ' + action;
+            default:
+                logger.info(`[Agent] └─ handleCommand() 完成 (${Date.now() - t0}ms) [unknown: ${action}]`);
+                return 'Unknown: ' + action;
         }
     }
     // ====== 长任务恢复命令 ======
@@ -2124,9 +2178,10 @@ class AgentCore {
             const inputBrief = input.length > 500 ? input.slice(0, 500) + '...' : input;
             const outputBrief = output.length > 1000 ? output.slice(0, 1000) + '...' : output;
             store.append(inputBrief + '\n' + outputBrief);
+            logger.debug(`[Memory] recordInteraction: 写入 ${inputBrief.length}+${outputBrief.length} 字到记忆文件`);
         }
         catch (err) {
-            logger.warn('[Agent] memory write failed', err);
+            logger.warn('[Memory] recordInteraction 失败: ' + (err as Error).message);
         }
     }
     stop() {
