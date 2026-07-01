@@ -37,6 +37,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as path from 'path';
 import logger from '../../logger';
+import { getTracer, finishTrace } from '../../resilience/tracer';
 
 class AgentCore {
     adapter;
@@ -87,6 +88,8 @@ class AgentCore {
     idleTaskMgr;
     sessionDiag;
     nonsenseDetector;
+    // 全链路追踪器
+    _tracer;
     messages = [];
     running = false;
     sessionId;
@@ -391,15 +394,24 @@ class AgentCore {
         const t0 = Date.now();
         this.messages.push({ role: 'user', content: userInput });
         logger.info(`[Agent] ┌─ sendMessage() 输入(${userInput.length}字): ${userInput.slice(0, 100)}`);
+        // 全链路追踪：开始
+        this._tracer = getTracer(this.sessionId);
+        const sendSpanId = this._tracer.start('sendMessage', 'Agent', { input: userInput.slice(0, 80) });
+        this._tracer.start('pushMessage', 'Agent', { role: 'user', len: userInput.length });
+        this._tracer.end('pushMessage');
         // 事件总线：开始 pipeline
         agentEventBus.startSession(3);
 
         // 快速通道：/ 开头的命令跳过 LLM 意图解析
         if (userInput.startsWith('/')) {
             logger.info('[Agent] │ └─ 路由: /命令 → handleCommand()');
+            this._tracer.start('handleCommand', 'Agent', { cmd: userInput.slice(0, 60) });
             const reply = await this.handleCommand(userInput);
+            this._tracer.end('handleCommand', { reply_len: reply.length });
             const dur = Date.now() - t0;
             this.messages.push({ role: 'assistant', content: reply });
+            this._tracer.end(sendSpanId, { reply_len: reply.length, dur });
+            finishTrace(this.sessionId);
             logger.info(`[Agent] └─ sendMessage() 完成 (${dur}ms) 回复${reply.length}字`);
             agentEventBus.endSession(true, '命令完成');
             return reply;
@@ -480,11 +492,14 @@ class AgentCore {
             });
         }
         const totalDur = Date.now() - t0;
+        this._tracer.end(sendSpanId, { intent_type: intent.type, reply_len: reply.length, dur: totalDur, isError });
+        finishTrace(this.sessionId);
         logger.info(`[Agent] └─ sendMessage() 完成 (${totalDur}ms) [${intent.type}] ${isError ? '❌' : '✅'} 回复${reply.length}字`);
         return reply;
     }
     async handleChat(userInput) {
         const t0 = Date.now();
+        const chatSpanId = this._tracer?.start('handleChat', 'Agent', { input: userInput.slice(0, 80) });
         logger.info(`[Agent] ┌─ handleChat() 输入(${userInput.length}字)`);
         this.nonsenseDetector.markConversationStart(userInput);
         let chatOutput = '';
@@ -596,6 +611,10 @@ class AgentCore {
         this.nonsenseDetector.markConversationEnd(normal, userInput, chatOutput, reason || chatError || undefined);
         if (!normal) {
             logger.warn(`[Nonsense] handleChat 检测到异常: ${reason || chatError}`);
+        }
+        if (this._tracer && chatSpanId) {
+            if (chatError) this._tracer.error(chatSpanId, chatError);
+            else this._tracer.end(chatSpanId, { reply_len: chatOutput.length, dur: Date.now() - t0 });
         }
         logger.info(`[Agent] └─ handleChat() 完成 (${Date.now() - t0}ms) 回复${chatOutput.length}字${chatError ? ' ❌' : ''}`);
         return chatOutput;
@@ -807,6 +826,7 @@ class AgentCore {
     }
     async handleTask(intent, rawMessage) {
         const t0 = Date.now();
+        const taskSpanId = this._tracer?.start('handleTask', 'Agent', { intent_type: intent.type, confidence: intent.confidence, summary: intent.summary?.slice(0, 60) });
         logger.info(`[Agent] ┌─ handleTask() intent.confidence=${intent.confidence} summary=${intent.summary}`);
         this.nonsenseDetector.markConversationStart(rawMessage);
         let taskOutput = '';
@@ -880,6 +900,10 @@ class AgentCore {
         this.nonsenseDetector.markConversationEnd(normal, rawMessage, taskOutput, reason || taskError || undefined);
         if (!normal) {
             logger.warn(`[Nonsense] handleTask 检测到异常: ${reason || taskError}`);
+        }
+        if (this._tracer && taskSpanId) {
+            if (taskError) this._tracer.error(taskSpanId, taskError);
+            else this._tracer.end(taskSpanId, { reply_len: taskOutput.length, dur: Date.now() - t0 });
         }
         logger.info(`[Agent] └─ handleTask() 完成 (${Date.now() - t0}ms) 回复${taskOutput.length}字${taskError ? ' ❌' : ''}`);
         return taskOutput;

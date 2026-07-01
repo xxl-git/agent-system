@@ -368,6 +368,71 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: GET /api/trace — 获取最新 trace 报告
+  if (url === '/api/trace' && isGet()) {
+    try {
+      const tracerModule = require('../resilience/tracer');
+      const report = tracerModule.getTraceReport();
+      if (!report) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ trace: null, message: 'No trace data available' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        sessionId: report.sessionId,
+        hasError: report.hasError,
+        totalDurationMs: report.totalDurationMs,
+        chainText: report.chainText,
+        startedAt: report.startedAt,
+      }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: GET /api/trace/list — 最近 trace 列表
+  if (url === '/api/trace/list' && isGet()) {
+    try {
+      const tracerModule = require('../resilience/tracer');
+      const traces = tracerModule.getRecentTraces(20);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ traces }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: GET /api/trace/:sessionId — 按会话 ID 查 trace
+  if (url.startsWith('/api/trace/') && isGet()) {
+    try {
+      const sessionId = url.split('/')[3];
+      const tracerModule = require('../resilience/tracer');
+      const report = tracerModule.getTraceReport(sessionId);
+      if (!report) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'TraceNotFound' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        sessionId: report.sessionId,
+        hasError: report.hasError,
+        totalDurationMs: report.totalDurationMs,
+        chainText: report.chainText,
+        startedAt: report.startedAt,
+      }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   // API: GET /api/dashboard/memory — 记忆统计
   if (url === '/api/dashboard/memory' && isGet()) {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
