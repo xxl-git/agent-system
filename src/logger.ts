@@ -35,8 +35,10 @@ class Logger {
   private maxFileSize: number = DEFAULT_MAX_FILE_SIZE;
   private maxRotatedFiles: number = DEFAULT_MAX_ROTATED;
   private writeCount = 0;
-  private readonly rotationCheckInterval = 50; // 每 50 次写入检查一次大小
-  private _firstWrite = true; // 首次写入前检查轮转
+  private readonly rotationCheckInterval = 50;
+  private _firstWrite = true;
+  // WARN 去重：记录每条 WARN 消息关键 key 的最后写入时间
+  private _lastWarnTimestamps = new Map<string, number>();
 
   constructor(logDir: string) {
     this.logDir = logDir;
@@ -187,9 +189,26 @@ class Logger {
     this.checkRotation();
     fs.appendFileSync(logFile, line + '\n', 'utf-8');
 
-    // 错误和警告额外写入错误日志文件
-    if (level === 'error' || level === 'warn') {
+    // 错误日志文件：ERROR 级别全部写入，WARN 级别按频率过滤
+    if (level === 'error') {
       this.writeErrorToFile(timestamp, level, content);
+    } else if (level === 'warn') {
+      // 去重：相同前缀的 WARN 消息每 60 秒只写一次
+      const warnKey = extractWarnKey(message);
+      const now = Date.now();
+      if (warnKey) {
+        const last = this._lastWarnTimestamps.get(warnKey);
+        if (!last || (now - last) >= 60000) {
+          this._lastWarnTimestamps.set(warnKey, now);
+          this.writeErrorToFile(timestamp, level, content);
+          // 清理过期 key（超过 5 分钟前的记录）
+          for (const [k, v] of this._lastWarnTimestamps) {
+            if (now - v > 300000) this._lastWarnTimestamps.delete(k);
+          }
+        }
+      } else {
+        this.writeErrorToFile(timestamp, level, content);
+      }
     }
   }
 
@@ -213,6 +232,17 @@ function formatArg(arg: unknown): string {
     return s;
   }
   return String(arg);
+}
+
+/** 提取 WARN 消息的去重 key（提取 [XXX] 标签 + 前 40 个字作为 key） */
+function extractWarnKey(message: string): string | null {
+  // 提取 [Agent] [LMStudio] [Diag] 等标签
+  const tagMatch = message.match(/\[([^\]]+)\]/);
+  if (!tagMatch) return null;
+  const tag = tagMatch[0];
+  // 取标签后的前 40 个字符作为内容 key
+  const contentKey = message.slice(tag.length).trim().substring(0, 40);
+  return `${tag} ${contentKey}`;
 }
 
 const logDir = path.resolve(process.cwd(), 'logs');
