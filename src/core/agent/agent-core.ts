@@ -586,6 +586,7 @@ class AgentCore {
             chatOutput = this.formatRecoveryResult(result);
         }
         catch (err) {
+            logger.error('[Agent] handleChat() 执行失败', err);
             chatOutput = `ERR: ${err.message || 'unknown error'}`;
             chatError = err.message || 'unknown error';
         }
@@ -790,6 +791,7 @@ class AgentCore {
             chatOutput = this.formatRecoveryResult(chatOutput);
         }
         catch (err) {
+            logger.error('[Agent] handleChatStream() 执行失败', err);
             chatOutput = `ERR: ${err.message || 'unknown error'}`;
             chatError = err.message || 'unknown error';
             agentEventBus.emitChatError(chatError);
@@ -1087,6 +1089,7 @@ class AgentCore {
                     this.checkpointMgr.save(cp.taskId, completed, stillRemaining, this.messages);
                 }
                 catch (stepErr) {
+                    logger.error('[Agent] orchestrator.execute() 失败', stepErr);
                     allSuccess = false;
                     results.push(`[❌] ${step.title}: ${stepErr.message || '执行失败'}`);
                     this.checkpointMgr.recordFailure(cp.taskId, {

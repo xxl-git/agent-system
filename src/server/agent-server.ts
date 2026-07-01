@@ -242,8 +242,91 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: GET /api/logs/errors — 列出错误日志文件
+  if (url === '/api/logs/errors' && isGet()) {
+    try {
+      const config = getConfig();
+      const logDir = (config.logging as any)?.dir || './logs';
+      const fullPath = path.resolve(process.cwd(), logDir);
+      if (!fs.existsSync(fullPath)) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ files: [] }));
+        return;
+      }
+      const files = fs.readdirSync(fullPath)
+        .filter((f: string) => f.endsWith('-errors.log') || f.endsWith('-errors.log.gz'))
+        .map((f: string) => {
+          const filePath = path.join(fullPath, f);
+          const stat = fs.statSync(filePath);
+          const dateMatch = f.match(/(\d{4}-\d{2}-\d{2})/);
+          return {
+            date: dateMatch ? dateMatch[1] : null,
+            size: stat.size,
+            compressed: f.endsWith('.gz'),
+            mtime: stat.mtime,
+          };
+        })
+        .filter((f: any) => f.date !== null)
+        .sort((a: any, b: any) => b.date.localeCompare(a.date));
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ files }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: GET /api/logs/errors/:date — 读取指定日期的错误日志
+  if (url.startsWith('/api/logs/errors/') && isGet()) {
+    try {
+      const date = url.split('/')[4];
+      const config = getConfig();
+      const logDir = (config.logging as any)?.dir || './logs';
+      const fullPath = path.resolve(process.cwd(), logDir);
+      // 路径安全验证
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Invalid date format. Expected YYYY-MM-DD.' }));
+        return;
+      }
+      const resolved = path.resolve(fullPath, `${date}-errors.log`);
+      if (!resolved.startsWith(fullPath)) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Path traversal detected.' }));
+        return;
+      }
+      let content = '';
+      if (fs.existsSync(resolved)) {
+        content = fs.readFileSync(resolved, 'utf-8');
+      } else {
+        const gzPath = resolved + '.gz';
+        if (fs.existsSync(gzPath)) {
+          const zlib = require('zlib');
+          content = zlib.gunzipSync(fs.readFileSync(gzPath)).toString('utf-8');
+        } else {
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'ErrorLogFileNotFound' }));
+          return;
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end(content);
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   // API: GET /api/logs/:date — 读取指定日期的日志
   if (url.startsWith('/api/logs/') && isGet()) {
+    // 守卫：跳过错误日志路由（已在上面处理）
+    if (url.includes('/errors')) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'NotFound' }));
+      return;
+    }
     try {
       const date = url.split('/')[3];
       const config = getConfig();

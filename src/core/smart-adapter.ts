@@ -252,6 +252,7 @@ export class SmartAdapter {
         resolve(result);
       } catch (err) {
         clearTimeout(timer);
+        logger.debug('[SmartAdapter] Promise.race timeout cleanup 异常', err);
         reject(err);
       }
     });

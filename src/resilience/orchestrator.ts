@@ -237,6 +237,7 @@ export class RecoveryOrchestrator extends EventEmitter {
             await this.executeRecoveryAction(action, ctx, failure);
             this.cb.pathSuccess(action);
           } catch (actionErr) {
+            logger.warn('[Recovery] 恢复动作执行失败', actionErr);
             recoveryLog.push('  ❌ 动作失败: ' + this.extractMsg(actionErr));
             this.cb.pathFailure(action, this.extractMsg(actionErr));
           }
@@ -259,6 +260,7 @@ export class RecoveryOrchestrator extends EventEmitter {
             durationMs: Date.now() - startTime,
           };
         } catch (retryErr) {
+          logger.debug('[Recovery] executor 重试失败', retryErr);
           recoveryLog.push('  重试失败: ' + this.extractMsg(retryErr).slice(0, 80));
           // 继续下一次重试
         }
@@ -303,6 +305,7 @@ export class RecoveryOrchestrator extends EventEmitter {
 
     this._degradations++;
     this._recordHistory('degraded', `降级(${degResult.level}): ${failure.message}`, taskId ?? null);
+    logger.error(`[Recovery] 降级(${degResult.level}): ${failure.type} — ${failure.message}`, { taskId });
     return {
       success: degResult.partialSuccess,
       output: degResult.output,
