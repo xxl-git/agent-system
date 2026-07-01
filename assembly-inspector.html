@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Agent System — 消息装配流水线 v2</title>
+<style>
+:root {
+  --bg: #05070a; --surface: rgba(18,20,30,0.85);
+  --text: #e4e4e7; --text-dim: #8b8b95; --text-muted: #5c5c66;
+  --accent: #6366f1; --accent-dim: rgba(99,102,241,0.1);
+  --green: #22c55e; --amber: #f59e0b; --red: #ef4444; --blue: #3b82f6;
+  --radius: 12px; --radius-sm: 8px;
+  --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans SC",sans-serif;
+  --font-mono: 'JetBrains Mono','Fira Code',monospace;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font); background: var(--bg); color: var(--text);
+  padding: 20px 24px; min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  display: flex; flex-direction: column; gap: 16px;
+}
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: linear-gradient(rgba(99,102,241,0.012) 1px,transparent 1px),
+                    linear-gradient(90deg,rgba(99,102,241,0.012) 1px,transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Header */
+.header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; background: var(--surface);
+  border: 1px solid rgba(99,102,241,0.08); border-radius: var(--radius);
+  backdrop-filter: blur(20px); z-index: 1;
+}
+.header h1 { font-size: 15px; font-weight: 700; background: linear-gradient(135deg,#6366f1,#a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.header .badge { 
+  padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 500;
+  background: var(--accent-dim); border: 1px solid rgba(99,102,241,0.15);
+}
+.header .nav-links { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.header .nav-links a {
+  color: var(--text-muted); text-decoration: none; font-size: 11px;
+  padding: 5px 10px; border-radius: 6px; transition: all 0.2s;
+}
+.header .nav-links a:hover { color: var(--text); background: var(--accent-dim); }
+
+/* Auto-refresh toggle */
+.auto-refresh {
+  display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted);
+}
+.auto-refresh input[type="checkbox"] { accent-color: var(--accent); }
+
+/* Stage List */
+.stage-list { display: flex; flex-direction: column; gap: 12px; z-index: 1; }
+
+/* Stage Card */
+.stage-card {
+  background: var(--surface); border: 1px solid rgba(99,102,241,0.08);
+  border-radius: var(--radius); overflow: hidden;
+  backdrop-filter: blur(16px);
+}
+.stage-card.raw { border-color: rgba(59,130,246,0.2); }
+.stage-card.compressed { border-color: rgba(245,158,11,0.2); }
+.stage-card.injection { border-color: rgba(139,92,246,0.2); }
+.stage-card.assembled { border-color: rgba(34,197,94,0.2); }
+.stage-card.payload { border-color: rgba(99,102,241,0.3); box-shadow: 0 0 20px rgba(99,102,241,0.08); }
+
+.stage-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; cursor: pointer; user-select: none;
+  transition: background 0.2s;
+}
+.stage-header:hover { background: rgba(255,255,255,0.02); }
+
+.stage-icon { font-size: 16px; flex-shrink: 0; }
+.stage-num {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; flex-shrink: 0;
+}
+.stage-num.raw { background: rgba(59,130,246,0.15); color: var(--blue); }
+.stage-num.compressed { background: rgba(245,158,11,0.15); color: var(--amber); }
+.stage-num.injection { background: rgba(139,92,246,0.15); color: #a78bfa; }
+.stage-num.assembled { background: rgba(34,197,94,0.15); color: var(--green); }
+.stage-num.payload { background: rgba(99,102,241,0.18); color: var(--accent); }
+
+.stage-info { flex: 1; min-width: 0; }
+.stage-info .name { font-size: 13px; font-weight: 600; }
+.stage-info .desc { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+
+.stage-stats {
+  display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  font-size: 10px; color: var(--text-dim);
+}
+.stage-stats .stat { white-space: nowrap; }
+.stage-stats .stat.change { color: var(--amber); }
+.stage-stats .stat.dur { color: var(--text-muted); }
+
+.stage-toggle {
+  font-size: 10px; color: var(--text-muted); flex-shrink: 0;
+  transition: transform 0.3s;
+}
+.stage-card.collapsed .stage-toggle { transform: rotate(-90deg); }
+
+/* Stage Body */
+.stage-body {
+  border-top: 1px solid rgba(99,102,241,0.06);
+  padding: 10px 14px; max-height: 800px; overflow-y: auto;
+  transition: max-height 0.3s ease;
+}
+.stage-card.collapsed .stage-body { max-height: 0; padding: 0 14px; overflow: hidden; border: none; }
+
+/* Message */
+.msg { margin-bottom: 8px; }
+.msg:last-child { margin-bottom: 0; }
+
+.msg-role {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
+  margin-bottom: 4px;
+}
+.msg-role.system { background: rgba(239,68,68,0.12); color: var(--red); }
+.msg-role.user { background: rgba(99,102,241,0.12); color: var(--accent); }
+.msg-role.assistant { background: rgba(34,197,94,0.12); color: var(--green); }
+.msg-role .len { font-weight: 400; color: var(--text-muted); margin-left: 4px; }
+
+.msg-content {
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.5;
+  padding: 8px 10px; background: rgba(0,0,0,0.3);
+  border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 300px; overflow-y: auto; position: relative;
+}
+.msg-content .collapse-btn {
+  position: sticky; bottom: 0; width: 100%; text-align: center;
+  padding: 4px; background: rgba(0,0,0,0.6); border: none;
+  color: var(--text-muted); font-size: 10px; cursor: pointer;
+}
+.msg-content.collapsed { max-height: 60px; }
+.msg-content .truncated {
+  color: var(--text-muted); font-size: 10px; padding: 2px 0;
+}
+
+/* Diff highlight */
+.msg-content .diff-new { background: rgba(34,197,94,0.08); }
+.msg-content .diff-removed { background: rgba(239,68,68,0.08); text-decoration: line-through; }
+
+/* Stage flow connector */
+.flow-connector {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; padding: 4px 0; font-size: 10px; color: var(--text-muted);
+}
+.flow-connector .arrow { color: var(--accent); opacity: 0.5; }
+
+/* Loading/Empty state */
+.empty-state {
+  text-align: center; padding: 40px; color: var(--text-muted);
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px dashed rgba(99,102,241,0.15);
+}
+.empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+.empty-state .hint { font-size: 11px; margin-top: 4px; }
+
+/* Model Payload Panel (embedded) */
+.model-payload-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; background: var(--accent-dim);
+  border: 1px solid rgba(99,102,241,0.2); border-radius: var(--radius-sm);
+  color: var(--accent); text-decoration: none; font-size: 12px;
+  transition: all 0.2s; cursor: pointer;
+}
+.model-payload-link:hover { background: rgba(99,102,241,0.18); border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>🔬 消息装配流水线</h1>
+  <span class="badge" id="statusBadge">等待数据</span>
+  <div class="nav-links">
+    <a href="agent-ui.html">💬 聊天</a>
+    <a href="logs-viewer.html">📄 日志</a>
+    <a href="admin-panel.html">⚙ 设置</a>
+    <label class="auto-refresh">
+      <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh()">
+      <span>自动刷新 (5s)</span>
+    </label>
+    <a href="javascript:fetchAssembly()" style="color:var(--accent)">🔄 刷新</a>
+  </div>
+</div>
+
+<!-- Model Payload Link -->
+<div style="display:flex;gap:10px;align-items:center;z-index:1">
+  <div class="model-payload-link" onclick="switchToPayloadTab()">
+    📨 查看《模型实时载荷》面板（LLM Router 原始 payload）
+  </div>
+</div>
+
+<!-- Stage List -->
+<div id="stageList" class="stage-list">
+  <div class="empty-state" id="emptyState">
+    <div class="icon">⚙️</div>
+    <div>等待消息装配数据...</div>
+    <div class="hint">发送一条消息后，这里会展示每一步的消息变化</div>
+  </div>
+</div>
+
+<script>
+// ═══ 数据获取 ═══
+
+let autoRefreshTimer = null;
+let lastSessionId = null;
+
+async function fetchAssembly() {
+  const res = await fetch('/api/assembly');
+  const data = await res.json();
+  if (!data || !data.report) {
+    // 如果最新没有，尝试用 sessionId 查
+    if (lastSessionId) {
+      const res2 = await fetch(`/api/assembly/${lastSessionId}`);
+      const data2 = await res2.json();
+      if (!data2 || data2.error) return;
+      renderAssembly(data2);
+      return;
+    }
+    return;
+  }
+  lastSessionId = data.report?.sessionId || data.sessionId;
+  renderAssembly(data.report || data);
+}
+
+function toggleAutoRefresh() {
+  if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+  if (document.getElementById('autoRefresh').checked) {
+    autoRefreshTimer = setInterval(fetchAssembly, 5000);
+  }
+}
+
+// ═══ 渲染 ═══
+
+const STAGE_CONFIG = {
+  raw_input: { icon: '📝', numClass: 'raw', label: '原始上下文' },
+  context_compressed: { icon: '🗜️', numClass: 'compressed', label: '上下文压缩' },
+  injection_prepare: { icon: '💉', numClass: 'injection', label: '记忆/经验注入' },
+  assembled: { icon: '🧩', numClass: 'assembled', label: 'PromptAssembler 组装' },
+  llm_payload: { icon: '📨', numClass: 'payload', label: '发送给 LLM 的载荷' },
+};
+
+function roleLabel(role) {
+  const map = { system: '系统指令', user: '用户消息', assistant: '助手回复' };
+  return map[role] || role;
+}
+
+function roleIcon(role) {
+  const map = { system: '⚙️', user: '👤', assistant: '🤖' };
+  return map[role] || '❓';
+}
+
+function formatBytes(n) {
+  if (n > 1000) return (n / 1000).toFixed(1) + 'k';
+  return n + '';
+}
+
+function truncateContent(content, maxLen) {
+  if (!content) return { text: '', truncated: false };
+  if (content.length <= maxLen) return { text: content, truncated: false };
+  return { text: content.slice(0, maxLen), truncated: true, totalLen: content.length };
+}
+
+function renderAssembly(report) {
+  const container = document.getElementById('stageList');
+  const empty = document.getElementById('emptyState');
+  const badge = document.getElementById('statusBadge');
+
+  if (empty) empty.style.display = 'none';
+
+  // Update badge
+  const stageCount = report.stages?.length || 0;
+  const hasPayload = report.stages?.some(s => s.name === 'llm_payload');
+  badge.textContent = `📐 ${stageCount} 阶段${hasPayload ? ' · ✅ 已+发送给模型' : ''}`;
+
+  let html = '';
+
+  // Session info
+  html += `<div style="display:flex;gap:10px;font-size:11px;color:var(--text-muted);padding:0 4px;z-index:1">
+    <span>会话: <code style="color:var(--text-dim)">${report.sessionId || '-'}</code></span>
+    <span>总耗时: ${report.totalDurationMs || '?'}ms</span>
+    <span>总阶段: ${stageCount}</span>
+  </div>`;
+
+  // Stages
+  if (!report.stages || report.stages.length === 0) {
+    html += `<div class="empty-state"><div class="icon">⏳</div><div>装配数据为空</div></div>`;
+  } else {
+    report.stages.forEach((stage, idx) => {
+      const cfg = STAGE_CONFIG[stage.name] || { icon: '📦', numClass: '', label: stage.label || stage.name };
+      const isLast = idx === report.stages.length - 1;
+      const stats = stage.stats || {};
+
+      html += `<div class="stage-card ${cfg.numClass}" data-stage="${stage.name}" data-idx="${idx}">`;
+      html += `<div class="stage-header" onclick="this.closest('.stage-card').classList.toggle('collapsed')">`;
+      html +=   `<span class="stage-num ${cfg.numClass}">${idx + 1}</span>`;
+      html +=   `<span class="stage-icon">${cfg.icon}</span>`;
+      html +=   `<div class="stage-info">`;
+      html +=     `<div class="name">${cfg.label}</div>`;
+      html +=     `<div class="desc">${stage.description || ''}</div>`;
+      html +=   `</div>`;
+      html +=   `<div class="stage-stats">`;
+      html +=     `<span class="stat">📨 ${stats.msgCount || stage.messages?.length || 0}条</span>`;
+      html +=     `<span class="stat">📏 ${formatBytes(stats.totalChars || 0)}字</span>`;
+      if (stats.diffChars !== undefined) {
+        const cls = parseInt(stats.diffChars) > 0 ? 'change' : '';
+        html += `<span class="stat ${cls}">📊 ${stats.diffChars}</span>`;
+      }
+      if (stats.hasSummary) html += `<span class="stat" style="color:var(--amber)">📝+摘要</span>`;
+      if (stats.hasMemory) html += `<span class="stat" style="color:var(--blue)">💾+记忆</span>`;
+      if (stats.hasExperience) html += `<span class="stat" style="color:var(--green)">⭐+经验</span>`;
+      if (stats.sysChars > 0) html += `<span class="stat">⚙️ ${formatBytes(stats.sysChars)}</span>`;
+      html +=     `<span class="stat dur">⏱ ${stage.durationMs || '?'}ms</span>`;
+      html +=   `</div>`;
+      html +=   `<span class="stage-toggle">▼</span>`;
+      html += `</div>`;
+      html += `<div class="stage-body">`;
+
+      // Messages
+      const msgs = stage.messages || [];
+      if (msgs.length === 0) {
+        html += `<div style="color:var(--text-muted);padding:8px;font-size:11px">（无消息）</div>`;
+      } else {
+        msgs.forEach((msg, mi) => {
+          const contentInfo = truncateContent(msg.content || '', 300);
+          html += `<div class="msg">`;
+          html +=   `<div class="msg-role ${msg.role}">${roleIcon(msg.role)} ${roleLabel(msg.role)} <span class="len">${(msg.content || '').length}字</span></div>`;
+          html +=   `<div class="msg-content${contentInfo.truncated ? ' collapsed' : ''}" onclick="this.classList.toggle('collapsed')">`;
+          html +=     escHtml(contentInfo.text);
+          if (contentInfo.truncated) {
+            html += `<div class="truncated">… 共 ${contentInfo.totalLen} 字（点击展开）</div>`;
+          }
+          html +=   `</div>`;
+          html += `</div>`;
+        });
+      }
+      html += `</div></div>`;
+
+      // Flow arrow between stages
+      if (!isLast) {
+        html += `<div class="flow-connector"><span class="arrow">⏬</span> <span>下一阶段</span></div>`;
+      }
+    });
+
+    // Final: show the transformation summary
+    html += `<div style="display:flex;gap:10px;padding:8px 4px;font-size:11px;color:var(--text-muted);z-index:1;flex-wrap:wrap">`;
+    const firstStage = report.stages[0];
+    const lastStage = report.stages[report.stages.length - 1];
+    if (firstStage && lastStage) {
+      const orig = firstStage.stats?.totalChars || 0;
+      const final = lastStage.stats?.totalChars || 0;
+      html += `<span>📊 原始: ${formatBytes(orig)}字 → 最终: ${formatBytes(final)}字 (${final > orig ? '+' : ''}${final - orig}字)</span>`;
+      html += `<span>阶段数: ${report.stages.length}</span>`;
+      html += `<span>总耗时: ${report.totalDurationMs}ms</span>`;
+    }
+    html += `</div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+// ═══ 工具函数 ═══
+
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ═══ 切换到模型载荷面板 ═══
+function switchToPayloadTab() {
+  // Try to open inline or navigate
+  window.open('/agent-ui.html?tab=payload', '_blank');
+}
+
+// ═══ 初始化 ═══
+
+fetchAssembly();
+toggleAutoRefresh();
+
+</script>
+</body>
+</html>

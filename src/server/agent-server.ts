@@ -433,6 +433,45 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: GET /api/assembly — 最新消息装配流水线
+  if (url === '/api/assembly' && isGet()) {
+    try {
+      const inspector = require('../resilience/assembly-inspector');
+      const report = inspector.getAssemblyReport();
+      if (!report) {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ report: null, message: 'No assembly data' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(report));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: GET /api/assembly/:sessionId — 按会话查装配流水线
+  if (url.startsWith('/api/assembly/') && isGet()) {
+    try {
+      const sessionId = url.split('/')[3];
+      const inspector = require('../resilience/assembly-inspector');
+      const report = inspector.getAssemblyReport(sessionId);
+      if (!report) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'AssemblyReportNotFound' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(report));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   // API: GET /api/dashboard/memory — 记忆统计
   if (url === '/api/dashboard/memory' && isGet()) {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });

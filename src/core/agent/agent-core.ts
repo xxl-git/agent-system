@@ -38,6 +38,7 @@ import * as path from 'path';
 import * as path from 'path';
 import logger from '../../logger';
 import { getTracer, finishTrace } from '../../resilience/tracer';
+import { createAssemblyReport, addAssemblyStage, formatAssemblyReport, getAssemblyReport } from '../../resilience/assembly-inspector';
 
 class AgentCore {
     adapter;
@@ -90,6 +91,8 @@ class AgentCore {
     nonsenseDetector;
     // 全链路追踪器
     _tracer;
+    // 消息装配流水线记录
+    _assemblyReport;
     messages = [];
     running = false;
     sessionId;
@@ -522,6 +525,13 @@ class AgentCore {
                     this.ctxManager.updateConfig({ maxTokens: effectiveWindow });
                 }
                 catch { /* adapter 不支持时忽略 */ }
+
+                // ══ 消息装配追踪：Stage 0 - 原始上下文 ══
+                if (!this._assemblyReport) {
+                    this._assemblyReport = createAssemblyReport(this.sessionId, userInput);
+                    addAssemblyStage(this._assemblyReport, 'raw_input', '原始用户输入', '用户输入+历史消息', this.messages);
+                }
+
                 // P7: 上下文管理 — 压缩后发送
                 const ctxResult = await this.ctxManager.process(this.messages, userInput, async (prompt) => {
                     // 事件总线：模型开始响应
@@ -553,6 +563,12 @@ class AgentCore {
                 try {
                     // 事件总线：模型开始响应
                     agentEventBus.modelResponding(this.adapter.model);
+
+                    // ══ 消息装配追踪：Stage 2 - 压缩后上下文 ══
+                    if (this._assemblyReport) {
+                        addAssemblyStage(this._assemblyReport, 'context_compressed', '上下文压缩后', ctxResult.compressed ? 'ContextManager 已压缩上下文' : '上下文未压缩', ctxResult.messages);
+                    }
+
                     // Phase 3: 使用 PromptAssembler 组装最终 messages
                     // ContextManager 已处理压缩，ctxResult.messages 包含处理后的上下文
                     // Experience module: 检索相关经验（条件性注入）
@@ -568,6 +584,19 @@ class AgentCore {
                             logger.debug('[Agent] 经验检索失败（非阻塞）', err);
                         }
                     }
+
+                    // ══ 消息装配追踪：Stage 3 - 记忆+经验注入前 ══
+                    if (this._assemblyReport && (this._cachedMemoryBlock || experienceBlock)) {
+                        const preInjectMsgs = [...ctxResult.messages];
+                        if (this._cachedMemoryBlock) {
+                            preInjectMsgs.push({ role: 'user', content: `[MEMORY BLOCK即将注入: ${this._cachedMemoryBlock.length}字]` });
+                        }
+                        if (experienceBlock) {
+                            preInjectMsgs.push({ role: 'user', content: `[EXPERIENCE BLOCK即将注入: ${experienceBlock.length}字]` });
+                        }
+                        addAssemblyStage(this._assemblyReport, 'injection_prepare', '记忆/经验准备', `memory=${this._cachedMemoryBlock?.length ?? 0}字, experience=${experienceBlock?.length ?? 0}字`, preInjectMsgs);
+                    }
+
                     const assembled = this.promptAssembler.assemble({
                         identityTemplateId: 'agent.identity',
                         identityVars: this.getIdentityVars(),
@@ -582,6 +611,12 @@ class AgentCore {
                         ` hasExperience=${assembled.metadata.hasExperience}` +
                         ` hasSummary=${assembled.metadata.hasSummary}`,
                     );
+
+                    // ══ 消息装配追踪：Stage 4 - 完整组装后 ══
+                    if (this._assemblyReport) {
+                        addAssemblyStage(this._assemblyReport, 'assembled', 'PromptAssembler 组装后', `memory=${assembled.metadata.hasMemory}, experience=${assembled.metadata.hasExperience}, summary=${assembled.metadata.hasSummary}`, assembled.messages);
+                    }
+
                     // LLM Router 统一调用：自动广播 payload（附加组装元数据）
                     const llmT0 = Date.now();
                     const response = await llm_router_1.getLLMRouter().call({
@@ -591,7 +626,21 @@ class AgentCore {
                     });
                     const llmDur = Date.now() - llmT0;
                     const content = response.choices?.[0]?.message?.content;
+                    const llmPayload = {
+                        taskType: 'chat',
+                        messageCount: assembled.messages.length,
+                        role: (assembled.messages[assembled.messages.length - 1]?.role || '?'),
+                        contentLen: content?.length || 0,
+                        model: this.adapter.model,
+                    };
                     logger.info(`[Agent] │ ├─ LLM chat() 响应 ${content ? content.length : 0}字 (${llmDur}ms)`);
+
+                    // ══ 消息装配追踪：Stage 5 - 最终发送给模型的 payload ══
+                    if (this._assemblyReport) {
+                        addAssemblyStage(this._assemblyReport, 'llm_payload', 'LLM发送载荷', `模型: ${this.adapter.model}, 温度参数: 默认`, assembled.messages);
+                        logger.info(`[Agent] │ └─ 消息装配流水线:\n${formatAssemblyReport(this._assemblyReport)}`);
+                    }
+
                     return content ?? '(empty)';
                 }
                 finally {
