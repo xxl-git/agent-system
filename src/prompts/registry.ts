@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import logger from '../logger';
 import type { LLMTaskType } from '../core/agent-event-bus';
-import type { LLMParams } from '../llm/llm-router';
+import type { LLMParams } from '@agent-system/llm';
 
 // ─── 类型定义 ───────────────────────────────────────────────────────────────
 

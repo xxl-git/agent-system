@@ -2,8 +2,8 @@
 // v2: 支持 PromptRegistry（提示词模板化）
 import type { ChatMessage } from '../models/adapters/lmstudio';
 import { LMStudioAdapter } from '../models/adapters/lmstudio';
-import { getLLMRouter } from '../llm/llm-router';
-import { getPromptRegistry } from '../prompts/registry';
+import { getLLMRouter } from '@agent-system/llm';
+import { getPromptRegistry } from '@agent-system/prompts';
 
 export interface SubTask {
   id: string;

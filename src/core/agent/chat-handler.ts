@@ -2,12 +2,12 @@
 // ChatHandler - Phase 2 重构：聊天处理模块
 // 从 agent-core.ts 提取的聊天处理逻辑（handleChat 和 handleChatStream）
 
-import * as llm_router_1 from '../../llm/llm-router';
+import * as llm_router_1 from '@agent-system/llm';
 import * as context_manager_1 from '../context-manager';
-import * as session_recovery_1 from '../../memory/session-recovery';
-import * as experience_1 from '../../experience';
-import * as nonsense_detector_1 from '../../resilience/nonsense-detector';
-import * as health_monitor_1 from '../../resilience/health-monitor';
+import * as session_recovery_1 from '@agent-system/memory';
+import * as experience_1 from '@agent-system/experience';
+import * as nonsense_detector_1 from '@agent-system/resilience';
+import * as health_monitor_1 from '@agent-system/resilience';
 import { agentEventBus } from '../agent-event-bus';
 import logger from '../../logger';
 

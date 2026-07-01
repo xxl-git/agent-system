@@ -3,14 +3,14 @@
 // 依赖注入模式，便于测试和后续维护
 
 import { agentEventBus } from '../agent-event-bus';
-import * as nonsense_detector_1 from '../../resilience/nonsense-detector';
+import * as nonsense_detector_1 from '@agent-system/resilience';
 import * as orchestrator_1 from '../orchestrator';
 import * as project_manager_1 from '../projects/project-manager';
 import * as collaboration_1 from '../../agents/collaboration';
 import * as sub_agent_1 from '../../agents/sub-agent';
-import * as orchestrator_2 from '../../resilience/orchestrator';
-import * as health_monitor_1 from '../../resilience/health-monitor';
-import * as session_diagnostics_1 from '../../resilience/session-diagnostics';
+import * as orchestrator_2 from '@agent-system/resilience';
+import * as health_monitor_1 from '@agent-system/resilience';
+import * as session_diagnostics_1 from '@agent-system/resilience';
 import { SmartAdapter } from '@agent-system/llm';
 import logger from '../../logger';
 

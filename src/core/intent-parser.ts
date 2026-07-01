@@ -2,8 +2,8 @@
 // v4: 支持 PromptRegistry（提示词模板化，不再硬编码）
 import type { ChatMessage } from '../models/adapters/lmstudio';
 import { LMStudioAdapter } from '../models/adapters/lmstudio';
-import { getLLMRouter, type LLMRouter } from '../llm/llm-router';
-import { getPromptRegistry } from '../prompts/registry';
+import { getLLMRouter, type LLMRouter } from '@agent-system/llm';
+import { getPromptRegistry } from '@agent-system/prompts';
 
 export interface ParsedIntent {
   type: 'chat' | 'task' | 'query' | 'command' | 'unknown';

@@ -4,8 +4,8 @@
 // LLM 辅助提取 + 规则引擎兜底
 
 import type { ChatMessage } from '../models/adapters/lmstudio';
-import { getLLMRouter } from '../llm/llm-router';
-import { getPromptRegistry } from '../prompts/registry';
+import { getLLMRouter } from '@agent-system/llm';
+import { getPromptRegistry } from '@agent-system/prompts';
 import { getExperienceStore } from './store';
 import { getExperienceRetriever } from './retriever';
 import logger from '../logger';

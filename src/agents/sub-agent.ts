@@ -2,7 +2,7 @@
 // 独立上下文、独立模型参数、限时运行
 import type { ChatMessage } from '../models/adapters/lmstudio';
 import { LMStudioAdapter } from '../models/adapters/lmstudio';
-import { getLLMRouter } from '../llm/llm-router';
+import { getLLMRouter } from '@agent-system/llm';
 import logger from '../logger';
 
 export interface SubAgentConfig {
