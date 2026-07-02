@@ -8,6 +8,8 @@ type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const DEFAULT_MAX_ROTATED = 5;
+const DEFAULT_LOG_RETENTION_DAYS = 30; // 超过 30 天的轮转.gz 文件自动清理
+const MAX_WARN_KEYS = 500; // WARN 去重 Map 最大条目数
 
 /** 确保日志目录存在 */
 function ensureLogDir(dir: string) {
@@ -37,6 +39,8 @@ class Logger {
   private writeCount = 0;
   private readonly rotationCheckInterval = 50;
   private _firstWrite = true;
+  private _rotating = false; // 轮转互斥锁
+  private _logRetentionDays: number = DEFAULT_LOG_RETENTION_DAYS;
   // WARN 去重：记录每条 WARN 消息关键 key 的最后写入时间
   private _lastWarnTimestamps = new Map<string, number>();
 
@@ -62,6 +66,16 @@ class Logger {
     this.maxRotatedFiles = n;
   }
 
+  /** 设置日志文件保留天数（超过此天数的 .gz 文件会被清理） */
+  setLogRetentionDays(days: number) {
+    this._logRetentionDays = days;
+  }
+
+  /** 获取当前日志级别 */
+  getLevel(): LogLevel {
+    return this.level;
+  }
+
   /** 获取当日日志文件路径 */
   private getLogFilePath(): string {
     return path.join(this.logDir, getTodayLogFilename());
@@ -70,6 +84,35 @@ class Logger {
   /** 获取当日错误日志文件路径 */
   private getErrorLogFilePath(): string {
     return path.join(this.errorLogDir, getTodayErrorFilename());
+  }
+
+  /**
+   * 清理超过保留天数的旧 .gz 轮转文件
+   */
+  cleanupOldLogs(): number {
+    const now = Date.now();
+    const maxAge = this._logRetentionDays * 24 * 60 * 60 * 1000;
+    let deleted = 0;
+    try {
+      const files = fs.readdirSync(this.logDir);
+      for (const file of files) {
+        // 匹配 .log.N.gz 或 -errors.log.N.gz 格式
+        if (/\d+\.gz$/.test(file) && /\.log\.\d+\.gz$/.test(file)) {
+          const filePath = path.join(this.logDir, file);
+          const stat = fs.statSync(filePath);
+          if (now - stat.mtimeMs > maxAge) {
+            fs.unlinkSync(filePath);
+            deleted++;
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[Logger] cleanupOldLogs error: ${err}`);
+    }
+    if (deleted > 0) {
+      console.log(`[Logger] 清理了 ${deleted} 个过期轮转日志文件`);
+    }
+    return deleted;
   }
 
   /** 启动时若当日日志已超阈值，立即轮转 */
@@ -93,8 +136,11 @@ class Logger {
    *   2. 现有 .N.gz 编号后移
    *   3. 压缩当前日志为 .1.gz
    *   4. 清空当前日志文件
+   *
+   * 线程安全：通过 _rotating 互斥锁防止并发轮转
    */
   private performRotation(logFile: string, isErrorLog: boolean) {
+    this._rotating = true;
     const baseName = logFile;
 
     // 删除最旧的文件
@@ -125,17 +171,22 @@ class Logger {
       logFile,
       `[${timestamp}] [INFO] [Logger] ${label}已轮转，旧内容已压缩至 ${path.basename(baseName)}.1.gz (${rotatedSizeMB} MB)\n`
     );
+    this._rotating = false;
   }
 
   /** 检查并执行轮转（每 rotationCheckInterval 次写入检查一次） */
   private checkRotation() {
-    // 首次写入前检查轮转（修复：应用重启时 log 文件已存在但 _firstWrite 为 true 导致不检查）
+    // 轮转互斥：如果正在轮转，跳过本次检查
+    if (this._rotating) return;
+
+    // 首次写入前检查轮转
     if (this._firstWrite) {
       this._firstWrite = false;
       this.rotateIfNeeded();
       return;
     }
     this.writeCount++;
+    if (this.writeCount < this.rotationCheckInterval) return;
     if (this.writeCount % this.rotationCheckInterval !== 0) return;
 
     const logFile = this.getLogFilePath();
@@ -208,6 +259,15 @@ class Logger {
         }
       } else {
         this.writeErrorToFile(timestamp, level, content);
+      }
+      // WARN Map 内存保护：超出上限时删除最旧的一半
+      if (this._lastWarnTimestamps.size > MAX_WARN_KEYS) {
+        const entries = [...this._lastWarnTimestamps.entries()];
+        entries.sort((a, b) => a[1] - b[1]); // 按时间排序
+        const toDelete = entries.slice(0, Math.floor(MAX_WARN_KEYS / 2));
+        for (const [k] of toDelete) {
+          this._lastWarnTimestamps.delete(k);
+        }
       }
     }
   }

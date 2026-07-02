@@ -319,6 +319,40 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: POST /api/logs/level — 动态修改日志级别
+  if (url === '/api/logs/level' && isPost()) {
+    try {
+      const body = await readBody(req);
+      const { level } = JSON.parse(body);
+      const validLevels = ['debug', 'info', 'warn', 'error'];
+      if (!validLevels.includes(level)) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: `无效日志级别: ${level}，可选: ${validLevels.join(', ')}` }));
+        return;
+      }
+      logger.setLevel(level);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, level: logger.getLevel() }));
+    } catch (err: any) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: POST /api/logs/cleanup — 清理过期旧日志
+  if (url === '/api/logs/cleanup' && isPost()) {
+    try {
+      const deleted = logger.cleanupOldLogs();
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, deletedFiles: deleted }));
+    } catch (err: any) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   // API: GET /api/logs/:date — 读取指定日期的日志
   if (url.startsWith('/api/logs/') && isGet()) {
     // 守卫：跳过错误日志路由（已在上面处理）
