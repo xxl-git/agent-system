@@ -255,14 +255,30 @@
       "toolCalls": 0,
       "toolErrors": 0,
       "timestamp": "2026-06-29T14:23:20.264Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 372133,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-30T03:13:59.075Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 372100,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-06-30T03:14:32.318Z"
     }
   ],
   "stats": {
-    "totalInteractions": 17,
+    "totalInteractions": 19,
     "successRate": 1,
-    "avgDurationMs": 91268.82352941176,
+    "avgDurationMs": 120831.73684210527,
     "toolErrorRate": 0,
-    "lastUsed": "2026-06-29T14:23:20.264Z",
+    "lastUsed": "2026-06-30T03:14:32.318Z",
     "preferredTasks": [
       "unknown",
       "chat"
@@ -270,5 +286,5 @@
   },
   "stage": "learning",
   "createdAt": "2026-06-20T01:31:28.387Z",
-  "updatedAt": "2026-06-29T14:23:20.264Z"
+  "updatedAt": "2026-06-30T03:14:32.318Z"
 }

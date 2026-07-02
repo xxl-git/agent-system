@@ -286,6 +286,8 @@ export function getTracer(sessionId: string): Tracer {
   if (!t) {
     t = new Tracer(sessionId);
     _activeTracers.set(sessionId, t);
+    // 同步 traceId 到 Logger，使日志行自动关联 trace
+    try { logger.setTraceId(sessionId); } catch { /* logger not ready */ }
     // 清理过多活跃 tracer
     if (_activeTracers.size > 20) {
       const first = _activeTracers.keys().next().value;

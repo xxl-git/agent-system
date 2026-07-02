@@ -1,7 +1,8 @@
-// 日志系统（含大小轮转 + gzip 压缩 + 错误单独记录 + 模块级过滤 + 缓冲区）
+// 日志系统（含大小轮转 + gzip 压缩 + 错误单独记录 + 模块级过滤 + 缓冲区 + JSON 格式 + traceId）
 import * as fs from 'fs';
 import * as path from 'path';
 import * as zlib from 'zlib';
+import { AsyncLocalStorage } from 'async_hooks';
 
 const LOG_DIR = path.resolve(__dirname, '../logs');
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -39,6 +40,12 @@ function extractModuleName(message: string): string | null {
   return match ? match[1] : null;
 }
 
+/**
+ * AsyncLocalStorage 用于 async 上下文的 traceId 传播。
+ * 服务器层在请求入口处：logContext.run({traceId: sessionId}, () => handleRequest())
+ */
+export const logContext = new AsyncLocalStorage<{ traceId: string }>();
+
 class Logger {
   private level: LogLevel = 'info';
   private logDir: string;
@@ -53,6 +60,10 @@ class Logger {
 
   // 模块级日志级别
   private _moduleLevels = new Map<string, LogLevel>();
+
+  // JSON 格式 + traceId
+  private _useJsonFormat = false;
+  private _traceId: string | null = null;
 
   // 日志缓冲区（减少磁盘 I/O）
   private _buffer: string[] = [];
@@ -82,6 +93,27 @@ class Logger {
   /** 获取全局日志级别 */
   getLevel(): LogLevel {
     return this.level;
+  }
+
+  /** 启用/禁用 JSON 格式输出（控制台保持文本，文件写入 JSON 行） */
+  setJsonFormat(enable: boolean) {
+    this._useJsonFormat = enable;
+  }
+
+  /** 是否使用 JSON 格式 */
+  getJsonFormat(): boolean {
+    return this._useJsonFormat;
+  }
+
+  /** 设置 traceId（直接设置，优先级低于 AsyncLocalStorage 上下文） */
+  setTraceId(id: string | null) {
+    this._traceId = id;
+  }
+
+  /** 获取当前 traceId：AsyncLocalStorage > 直接设置 > null */
+  getTraceId(): string | null {
+    const store = logContext.getStore();
+    return store?.traceId ?? this._traceId ?? null;
   }
 
   /** 设置模块级日志级别（空字符串或 null 恢复为全局级别） */
@@ -311,19 +343,41 @@ class Logger {
     }
   }
 
-  /** 写入错误日志到单独文件 */
-  private writeErrorToFile(timestamp: string, level: LogLevel, content: string) {
+  /** 写入错误日志到单独文件（不经过缓冲区，直接落盘——避免混入主日志文件） */
+  private writeErrorToFile(timestamp: string, level: LogLevel, content: string, moduleName: string | null = null) {
     const errFile = this.getErrorLogFilePath();
     ensureLogDir(this.errorLogDir);
-    const line = `[${timestamp}] [${level.toUpperCase()}] ${content}`;
-    // 错误日志也参旋轮转检查
+    const traceId = this.getTraceId();
+    let line: string;
+    if (this._useJsonFormat) {
+      line = this._formatJson(level, moduleName, content, traceId);
+    } else {
+      line = `[${timestamp}] [${level.toUpperCase()}]${moduleName ? ` [${moduleName}]` : ''} ${content}${traceId ? ` | trace:${traceId}` : ''}`;
+    }
+    // 错误日志也参与轮转检查
     if (fs.existsSync(errFile)) {
       const stats = fs.statSync(errFile);
       if (stats.size >= this.maxFileSize) {
         this.performRotation(errFile, true);
       }
     }
-    this._writeLine(errFile, line);
+    // 直接落盘，不经过主日志缓冲区
+    fs.appendFileSync(errFile, line + '\n', 'utf-8');
+  }
+
+  /** 格式化 JSON 日志行（content 中的模块标签已前置提取，此处不再重复） */
+  private _formatJson(
+    level: LogLevel, module: string | null, content: string, traceId: string | null
+  ): string {
+    const obj: Record<string, unknown> = {
+      t: new Date().toISOString(),
+      l: level.toUpperCase(),
+    };
+    if (module) obj.m = module;
+    // 如果有模块名，从 content 中去除开头的 [Module] 标签避免重复
+    obj.msg = module ? content.replace(/^\[[^\]]+\]\s*/, '').trim() : content;
+    if (traceId) obj.trace = traceId;
+    return JSON.stringify(obj);
   }
 
   private write(level: LogLevel, message: string, ...args: unknown[]) {
@@ -335,22 +389,40 @@ class Logger {
       ? `${message} ${args.map(a => formatArg(a)).join(' ')}`
       : message;
 
-    const line = `[${timestamp}] [${level.toUpperCase()}] ${content}`;
+    const traceId = this.getTraceId();
+    const moduleName = extractModuleName(message);
 
-    // 控制台输出
-    const prefix =
-      level === 'error' ? '❌' :
-      level === 'warn' ? '⚠️' :
-      level === 'debug' ? '🔍' : '📋';
-    console.log(`${prefix} ${line}`);
+    // 如有模块名，去除 content 开头的 [Module] 标签避免重复
+    const cleanContent = moduleName ? content.replace(/^\[[^\]]+\]\s*/, '').trim() : content;
 
-    // 文件写入（通过缓冲区）
-    const logFile = this.getLogFilePath();
-    this._writeLine(logFile, line);
+    if (this._useJsonFormat) {
+      // JSON 模式：文件写 JSON 行，控制台输出 JSON 行
+      const jsonLine = this._formatJson(level, moduleName, content, traceId);
+      const prefix =
+        level === 'error' ? '❌' :
+        level === 'warn' ? '⚠️' :
+        level === 'debug' ? '🔍' : '📋';
+      console.log(`${prefix} ${jsonLine}`);
+
+      const logFile = this.getLogFilePath();
+      this._writeLine(logFile, jsonLine);
+    } else {
+      // 文本模式
+      const line = `[${timestamp}] [${level.toUpperCase()}]${moduleName ? ` [${moduleName}]` : ''} ${cleanContent}${traceId ? ` | trace:${traceId}` : ''}`;
+
+      const prefix =
+        level === 'error' ? '❌' :
+        level === 'warn' ? '⚠️' :
+        level === 'debug' ? '🔍' : '📋';
+      console.log(`${prefix} ${line}`);
+
+      const logFile = this.getLogFilePath();
+      this._writeLine(logFile, line);
+    }
 
     // 错误日志文件：ERROR 级别全部写入，WARN 级别按频率过滤
     if (level === 'error') {
-      this.writeErrorToFile(timestamp, level, content);
+      this.writeErrorToFile(timestamp, level, cleanContent, moduleName);
     } else if (level === 'warn') {
       // 去重：相同前缀的 WARN 消息每 60 秒只写一次
       const warnKey = extractWarnKey(message);
@@ -359,14 +431,14 @@ class Logger {
         const last = this._lastWarnTimestamps.get(warnKey);
         if (!last || (now - last) >= 60000) {
           this._lastWarnTimestamps.set(warnKey, now);
-          this.writeErrorToFile(timestamp, level, content);
+          this.writeErrorToFile(timestamp, level, cleanContent, moduleName);
           // 清理过期 key（超过 5 分钟前的记录）
           for (const [k, v] of this._lastWarnTimestamps) {
             if (now - v > 300000) this._lastWarnTimestamps.delete(k);
           }
         }
       } else {
-        this.writeErrorToFile(timestamp, level, content);
+        this.writeErrorToFile(timestamp, level, cleanContent, moduleName);
       }
       // WARN Map 内存保护：超出上限时删除最旧的一半
       if (this._lastWarnTimestamps.size > MAX_WARN_KEYS) {

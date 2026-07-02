@@ -6,7 +6,7 @@ import * as path from 'path';
 import { AgentCore } from '../core/agent/agent-core';
 import { agentEventBus } from '../core/agent-event-bus';
 import { loadConfig, getConfig } from '../config';
-import { logger } from '../logger';
+import { logger, logContext } from '../logger';
 import { getFullDashboard, getProjectsSummary, getSkillsSummary, getAuditSummary, getModelSummary, getHealthSummary, getMemorySummary, getContextSummary, getFileListing, getLogStatus, getResilienceSummary } from './dashboard-api';
 import { sessionStore } from './session-store';
 
@@ -110,6 +110,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
   const url = req.url || '/';
+
+  // 注入 traceId 到 AsyncLocalStorage 上下文
+  const traceId = req.headers['x-trace-id'] as string ||
+    req.url?.match(/[?&]trace=([^&]+)/)?.[1] ||
+    'req_' + Date.now().toString(36);
+
+  return logContext.run({ traceId }, async () => {
 
   // SSE 事件流
   if (url === '/api/events') {
@@ -416,6 +423,48 @@ const server = http.createServer(async (req, res) => {
     logger.flush();
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  // API: POST /api/logs/json — 切换 JSON 格式
+  if (url === '/api/logs/json' && isPost()) {
+    try {
+      const body = await readBody(req);
+      const { enabled } = JSON.parse(body);
+      if (typeof enabled !== 'boolean') {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'enabled 必须是 boolean' }));
+        return;
+      }
+      logger.setJsonFormat(enabled);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, jsonFormat: logger.getJsonFormat() }));
+    } catch (err: any) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: GET /api/logs/json — 查看当前 JSON 格式状态
+  if (url === '/api/logs/json' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ jsonFormat: logger.getJsonFormat() }));
+    return;
+  }
+
+  // API: POST /api/logs/trace — 设置 traceId
+  if (url === '/api/logs/trace' && isPost()) {
+    try {
+      const body = await readBody(req);
+      const { traceId } = JSON.parse(body);
+      logger.setTraceId(traceId || null);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, traceId: logger.getTraceId() }));
+    } catch (err: any) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
     return;
   }
 
@@ -1166,7 +1215,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   serveStatic(res, staticPath);
+
+  }); // end logContext.run
 });
+
+// 快捷函数：获取当前请求的 traceId（供 tracer 等模块使用）
+export function getCurrentTraceId(): string | null {
+  return logger.getTraceId();
+}
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {

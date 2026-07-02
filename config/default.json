@@ -30,7 +30,7 @@
     "heartbeatIntervalMs": 300000,
     "maxSubTasks": 10,
     "defaultTimeoutMs": 600000,
-    "callTimeoutMs": 300000,
+    "callTimeoutMs": 60000,
     "maxRetries": 1,
     "emptyLoopThreshold": 3,
     "debugLogging": false
