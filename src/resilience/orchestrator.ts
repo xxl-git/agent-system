@@ -91,7 +91,7 @@ import { RetryEngine, getRetryEngine, type ClassifiedFailure, type RecoveryActio
 import { CircuitBreaker, getCircuitBreaker } from './circuit-breaker';
 import { CheckpointManager, getCheckpointManager, type CompletedStep, type FailureRecord } from './checkpoint';
 import { DegradationPath, getDegradationPath, type DegradationResult } from './degradation';
-import type { SubTask, TaskDAG } from '../core/task-decomposer';
+import type { SubTask, TaskDAG } from '@agent-system/resilience';
 import type { ChatMessage } from '../models/adapters/lmstudio';
 import logger from '../logger';
 
@@ -428,7 +428,7 @@ export class RecoveryOrchestrator extends EventEmitter {
     const taskId = 'dag-' + Date.now();
 
     // 注册任务
-    this.ckm.registerTask(taskId, dag.originalRequest, dag.tasks);
+    this.ckm.registerTask(taskId, dag.originalRequest || '', dag.tasks);
 
     for (const step of dag.tasks) {
       // 检查熔断器状态

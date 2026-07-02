@@ -403,7 +403,7 @@ export class RecoveryOrchestrator extends EventEmitter {
     const taskId = 'dag-' + Date.now();
 
     // 注册任务
-    this.ckm.registerTask(taskId, (dag.originalRequest || dag.description || dag.title), dag.tasks);
+    this.ckm.registerTask(taskId, dag.originalRequest || dag.description || dag.title || '', dag.tasks);
 
     for (const step of dag.tasks) {
       // 检查熔断器状态

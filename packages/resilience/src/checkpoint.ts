@@ -345,10 +345,11 @@ let _instance: CheckpointManager | null = null;
 export function getCheckpointManager(): CheckpointManager {
   if (!_instance) {
     const cpCfg = (() => { try { return getConfigSection('checkpoint'); } catch { return null; } })();
-    const config = cpCfg ? {
-      dataDir: cpCfg.dataDir,
-      contextWindow: cpCfg.contextWindow,
-      maxRecoveryAttempts: cpCfg.maxRecoveryAttempts,
+    // 防御：stub config（packages 内置空对象）dataDir 为 undefined，降级使用 DEFAULT_CONFIG
+    const config = (cpCfg && (cpCfg as any).dataDir) ? {
+      dataDir: (cpCfg as any).dataDir,
+      contextWindow: (cpCfg as any).contextWindow,
+      maxRecoveryAttempts: (cpCfg as any).maxRecoveryAttempts,
     } : undefined;
     _instance = new CheckpointManager(config);
   }

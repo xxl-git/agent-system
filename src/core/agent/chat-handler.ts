@@ -8,7 +8,7 @@ import * as session_recovery_1 from '@agent-system/memory';
 import * as experience_1 from '@agent-system/experience';
 import * as nonsense_detector_1 from '@agent-system/resilience';
 import * as health_monitor_1 from '@agent-system/resilience';
-import { agentEventBus } from '../agent-event-bus';
+import { agentEventBus } from '@agent-system/events';
 import logger from '../../logger';
 
 // 依赖接口定义

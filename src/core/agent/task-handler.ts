@@ -2,7 +2,7 @@
 // TaskHandler — Phase 3 重构：从 agent-core.ts 提取任务处理逻辑
 // 依赖注入模式，便于测试和后续维护
 
-import { agentEventBus } from '../agent-event-bus';
+import { agentEventBus } from '@agent-system/events';
 import * as nonsense_detector_1 from '@agent-system/resilience';
 import * as orchestrator_1 from '../orchestrator';
 import * as project_manager_1 from '../projects/project-manager';

@@ -61,7 +61,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { SubTask, TaskDAG } from '../core/task-decomposer';
+import type { SubTask, TaskDAG } from '@agent-system/resilience';
 import type { ChatMessage } from '../models/adapters/lmstudio';
 import logger from '../logger';
 import { getConfigSection } from '../config/agent-system-config';

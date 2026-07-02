@@ -1,12 +1,29 @@
 {
   "name": "@agent-system/core",
-  "version": "0.9.2",
-  "description": "Agent core — main loop, adapter, orchestrator, context manager, intent parser",
+  "version": "0.1.0",
+  "description": "Core agent: AgentCore, handlers, context manager, orchestrator, project manager",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": ["dist"],
   "scripts": {
     "build": "tsc",
-    "clean": "rmdir /s /q dist 2>nul & exit /b 0"
+    "clean": "Remove-Item -Path dist -Recurse -Force"
   },
+  "dependencies": {
+    "@agent-system/events": "0.1.0",
+    "@agent-system/llm": "0.1.0",
+    "@agent-system/memory": "0.1.0",
+    "@agent-system/models-core": "0.1.0",
+    "@agent-system/prompts": "0.1.0",
+    "@agent-system/resilience": "0.1.0",
+    "@agent-system/skills": "0.1.0",
+    "@agent-system/tools": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  },
+  "keywords": ["agent", "core", "orchestrator"],
+  "author": "Agent System Team",
   "license": "MIT"
 }

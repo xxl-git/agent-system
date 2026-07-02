@@ -1,6 +1,6 @@
 // 任务编排器 — Agent 主循环 Plan→Execute→Observe→Replan
 import { EventEmitter } from 'events';
-import type { SubTask, TaskDAG } from './task-decomposer';
+import type { SubTask, TaskDAG } from '@agent-system/resilience';
 import { TaskDecomposer } from './task-decomposer';
 import type { ParsedIntent } from './intent-parser';
 import { toolRegistry } from './tools/registry';
@@ -8,8 +8,8 @@ import type { ToolResult } from './tools/types';
 import { registerBaseTools } from './tools/base-tools';
 import { getProjectManager } from './projects/project-manager';
 import type { ProjectManager } from './projects/project-manager';
-import { getCheckpointManager } from '../resilience/checkpoint';
-import type { CheckpointManager, CompletedStep } from '../resilience/checkpoint';
+import { getCheckpointManager } from '@agent-system/resilience';
+import type { CheckpointManager, CompletedStep } from '@agent-system/resilience';
 import logger from '../logger';
 
 export interface OrchestratorConfig {
@@ -111,7 +111,7 @@ export class Orchestrator extends EventEmitter {
         rawMessage,
         toolRegistry.listNames()
       );
-      logger.info(`[Orchestrator] ├─ decompose() 完成 (${Date.now() - dagT0}ms): ${dag.tasks.length} 个子任务, ${dag.parallelGroups.length} 个并行组`);
+      logger.info(`[Orchestrator] ├─ decompose() 完成 (${Date.now() - dagT0}ms): ${dag.tasks.length} 个子任务, ${(dag.parallelGroups ?? []).length} 个并行组`);
 
       this.taskHistory.push(dag);
       this.emit('tasks:planned', dag);
@@ -124,8 +124,9 @@ export class Orchestrator extends EventEmitter {
       let replanCount = 0;
 
       // 按并行组依次执行
-      for (let gi = 0; gi < dag.parallelGroups.length; gi++) {
-        const group = dag.parallelGroups[gi];
+      const groups = dag.parallelGroups ?? [['1']];
+      for (let gi = 0; gi < groups.length; gi++) {
+        const group = groups[gi];
         const groupResults = await Promise.all(
           group.map(taskId => this.executeTask(dag.tasks.find(t => t.id === taskId)!))
         );
@@ -155,7 +156,7 @@ export class Orchestrator extends EventEmitter {
         }
 
         // 每组完成后保存项目检查点
-        if (activeProject && gi < dag.parallelGroups.length - 1) {
+        if (activeProject && gi < groups.length - 1) {
           this.pm.saveCheckpoint(
             activeProject.project,
             this.sessionId,
@@ -166,7 +167,7 @@ export class Orchestrator extends EventEmitter {
         }
 
         // ═══ 动态重规划 (Observe→Replan) ═══
-        if (this.config.enableReplan && replanCount < this.config.maxReplans && gi < dag.parallelGroups.length - 1) {
+        if (this.config.enableReplan && replanCount < this.config.maxReplans && gi < groups.length - 1) {
           const failedInGroup = groupResults.filter(r => !r.result.success);
           if (failedInGroup.length > 0) {
             logger.info(`[Orchestrator] 🔄 检测到 ${failedInGroup.length} 个失败步骤，评估是否需要重规划...`);
@@ -180,7 +181,7 @@ export class Orchestrator extends EventEmitter {
 
               // 调整剩余步骤
               if (replanDecision.adjustedSteps && replanDecision.adjustedSteps.length > 0) {
-                const remainingGroups = dag.parallelGroups.slice(gi + 1);
+                const remainingGroups = groups.slice(gi + 1);
                 const remainingTaskIds = remainingGroups.flat();
                 // 替换剩余步骤
                 for (const newStep of replanDecision.adjustedSteps) {
@@ -190,7 +191,7 @@ export class Orchestrator extends EventEmitter {
                   } else {
                     // 新增步骤
                     dag.tasks.push({ ...newStep, status: 'pending' });
-                    dag.parallelGroups[dag.parallelGroups.length - 1].push(newStep.id);
+                    groups[groups.length - 1].push(newStep.id);
                   }
                 }
                 this.emit('replan:done', { replanCount, adjustedStepCount: replanDecision.adjustedSteps.length });
@@ -307,7 +308,7 @@ ${remainingSteps || '(无)'}
       logger.debug(`[Orchestrator]   └─ 工具参数: ${JSON.stringify(task.toolArgs).slice(0, 200)}`);
       for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
         const toolT0 = Date.now();
-        const result = await toolRegistry.call(task.tool, task.toolArgs);
+        const result = await toolRegistry.call(task.tool, task.toolArgs as Record<string, string>);
         const toolDur = Date.now() - toolT0;
         if (result.success) {
           logger.info(`[Orchestrator] ✓ executeTask() id=${task.id} ✅ 成功 (${toolDur}ms) output=${result.output?.toString().slice(0, 100) || ''}`);

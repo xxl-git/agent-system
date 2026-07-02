@@ -4,24 +4,7 @@ import type { ChatMessage } from '../models/adapters/lmstudio';
 import { LMStudioAdapter } from '../models/adapters/lmstudio';
 import { getLLMRouter } from '@agent-system/llm';
 import { getPromptRegistry } from '@agent-system/prompts';
-
-export interface SubTask {
-  id: string;
-  title: string;
-  description: string;
-  tool?: string;              // 使用的工具名
-  toolArgs?: Record<string, string>; // 工具参数
-  dependsOn: string[];        // 依赖的子任务 ID
-  status: 'pending' | 'running' | 'done' | 'failed' | 'skipped';
-  result?: { success: boolean; output: string; error?: string };
-  estimatedMinutes: number;
-}
-
-export interface TaskDAG {
-  originalRequest: string;
-  tasks: SubTask[];
-  parallelGroups: string[][]; // 可并行的任务组
-}
+import type { SubTask, TaskDAG } from '@agent-system/resilience';
 
 export class TaskDecomposer {
   private adapter: LMStudioAdapter;
@@ -63,7 +46,8 @@ export class TaskDecomposer {
           tasks: parsed.tasks.map((t: any) => ({
             ...t,
             status: 'pending' as const,
-            dependsOn: t.dependsOn || [],
+            dependsOn: t.dependsOn || t.dependencies || [],
+            dependencies: t.dependencies || t.dependsOn || [],
           })),
           parallelGroups: parsed.parallelGroups || [parsed.tasks.map((t: any) => t.id)],
         };
@@ -79,6 +63,7 @@ export class TaskDecomposer {
         title: userRequest.slice(0, 80),
         description: userRequest,
         dependsOn: [],
+        dependencies: [],
         status: 'pending',
         estimatedMinutes: 1,
       }],
@@ -105,6 +90,7 @@ function simpleDecompose(userRequest: string, tools: string[]): TaskDAG | null {
         tool: 'write_file',
         toolArgs: { path: filePath, content },
         dependsOn: [],
+        dependencies: [],
         status: 'pending',
         estimatedMinutes: 1,
       }],
@@ -125,6 +111,7 @@ function simpleDecompose(userRequest: string, tools: string[]): TaskDAG | null {
         tool: 'read_file',
         toolArgs: { path: filePath },
         dependsOn: [],
+        dependencies: [],
         status: 'pending',
         estimatedMinutes: 1,
       }],
@@ -144,6 +131,7 @@ function simpleDecompose(userRequest: string, tools: string[]): TaskDAG | null {
         tool: 'web_search',
         toolArgs: { keyword: searchMatch[1].trim() },
         dependsOn: [],
+        dependencies: [],
         status: 'pending',
         estimatedMinutes: 1,
       }],

@@ -9,6 +9,7 @@ export { DegradationPath, getDegradationPath } from './degradation';
 export type { DegradationLevel, DegradationResult, DegradationConfig } from './degradation';
 export { CheckpointManager, getCheckpointManager } from './checkpoint';
 export type { FailureRecord, TaskCheckpoint, CompletedStep, CheckpointConfig } from './checkpoint';
+export type { SubTask, TaskDAG, ChatMessage } from './types';
 export { IdleTaskManager, getIdleTaskManager } from './idle-task-manager';
 export type { IdleTaskPriority, IdleTask, IdleTaskLogEntry } from './idle-task-manager';
 export { NonsenseDetector, getNonsenseDetector } from './nonsense-detector';

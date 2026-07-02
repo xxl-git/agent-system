@@ -147,7 +147,7 @@ const server = http.createServer(async (req, res) => {
   if (url === '/api/status' && isGet()) {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({
-      status: agentReady ? 'Agent v0.5.0' : 'initializing',
+      status: agentReady ? 'Agent v0.9.2' : 'initializing',
       model: agentReady ? (agent as any)?.adapter?.model || 'unknown' : 'loading...',
       sessionId: agentReady ? (agent as any)?.sessionId || '-' : '-',
       uptime: process.uptime(),
