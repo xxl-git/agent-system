@@ -353,6 +353,72 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: POST /api/logs/modules — 设置模块级日志级别
+  if (url === '/api/logs/modules' && isPost()) {
+    try {
+      const body = await readBody(req);
+      const { module, level } = JSON.parse(body);
+      if (!module || typeof module !== 'string') {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: '缺少 module 参数' }));
+        return;
+      }
+      const validLevels = ['debug', 'info', 'warn', 'error'];
+      if (level !== null && !validLevels.includes(level)) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: `无效日志级别: ${level}，可选: ${validLevels.join(', ')}，null 恢复全局` }));
+        return;
+      }
+      logger.setModuleLevel(module, level || null);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, module, level: level || '(global)', all: logger.getModuleLevels() }));
+    } catch (err: any) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: GET /api/logs/modules — 查看所有模块级日志级别
+  if (url === '/api/logs/modules' && isGet()) {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      global: logger.getLevel(),
+      modules: logger.getModuleLevels(),
+    }));
+    return;
+  }
+
+  // API: POST /api/logs/buffer — 配置日志缓冲区
+  if (url === '/api/logs/buffer' && isPost()) {
+    try {
+      const body = await readBody(req);
+      const { bufferSize } = JSON.parse(body);
+      if (bufferSize !== undefined) {
+        if (typeof bufferSize !== 'number' || bufferSize < 1 || bufferSize > 10000) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ error: 'bufferSize 必须是 1-10000 的整数（1=禁用缓冲）' }));
+          return;
+        }
+        logger.setBufferSize(bufferSize);
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, bufferSize: bufferSize }));
+    } catch (err: any) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // API: POST /api/logs/flush — 强制刷盘
+  if (url === '/api/logs/flush' && isPost()) {
+    logger.flush();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   // API: GET /api/logs/:date — 读取指定日期的日志
   if (url.startsWith('/api/logs/') && isGet()) {
     // 守卫：跳过错误日志路由（已在上面处理）

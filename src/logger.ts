@@ -1,15 +1,18 @@
-// 日志系统（含大小轮转 + gzip 压缩 + 错误单独记录）
+// 日志系统（含大小轮转 + gzip 压缩 + 错误单独记录 + 模块级过滤 + 缓冲区）
 import * as fs from 'fs';
 import * as path from 'path';
 import * as zlib from 'zlib';
 
 const LOG_DIR = path.resolve(__dirname, '../logs');
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
 
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const DEFAULT_MAX_ROTATED = 5;
 const DEFAULT_LOG_RETENTION_DAYS = 30; // 超过 30 天的轮转.gz 文件自动清理
 const MAX_WARN_KEYS = 500; // WARN 去重 Map 最大条目数
+const DEFAULT_BUFFER_SIZE = 50; // 缓冲 50 行后自动落盘
+const DEFAULT_FLUSH_INTERVAL_MS = 5000; // 最长 5 秒强制落盘
 
 /** 确保日志目录存在 */
 function ensureLogDir(dir: string) {
@@ -30,6 +33,12 @@ function getTodayErrorFilename(): string {
   return `${date}-errors.log`;
 }
 
+/** 从日志消息中提取模块名（匹配开头的 [XXX] 标签） */
+function extractModuleName(message: string): string | null {
+  const match = message.match(/^\[([A-Za-z0-9_/-]+)\]/);
+  return match ? match[1] : null;
+}
+
 class Logger {
   private level: LogLevel = 'info';
   private logDir: string;
@@ -41,6 +50,17 @@ class Logger {
   private _firstWrite = true;
   private _rotating = false; // 轮转互斥锁
   private _logRetentionDays: number = DEFAULT_LOG_RETENTION_DAYS;
+
+  // 模块级日志级别
+  private _moduleLevels = new Map<string, LogLevel>();
+
+  // 日志缓冲区（减少磁盘 I/O）
+  private _buffer: string[] = [];
+  private _bufferSize = DEFAULT_BUFFER_SIZE;
+  private _flushIntervalMs = DEFAULT_FLUSH_INTERVAL_MS;
+  private _flushTimer: NodeJS.Timeout | null = null;
+  private _bufferEnabled = true;
+
   // WARN 去重：记录每条 WARN 消息关键 key 的最后写入时间
   private _lastWarnTimestamps = new Map<string, number>();
 
@@ -50,10 +70,46 @@ class Logger {
     ensureLogDir(logDir);
     // 启动时检查当日日志是否已超过阈值，若是则立即轮转
     this.rotateIfNeeded();
+    // 启动定时刷盘
+    this._startFlushTimer();
   }
 
+  /** 设置全局日志级别 */
   setLevel(level: LogLevel) {
     this.level = level;
+  }
+
+  /** 获取全局日志级别 */
+  getLevel(): LogLevel {
+    return this.level;
+  }
+
+  /** 设置模块级日志级别（空字符串或 null 恢复为全局级别） */
+  setModuleLevel(module: string, level: LogLevel | null) {
+    if (level === null) {
+      this._moduleLevels.delete(module);
+    } else {
+      this._moduleLevels.set(module, level);
+    }
+  }
+
+  /** 获取所有模块级级别设置 */
+  getModuleLevels(): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const [mod, lvl] of this._moduleLevels) {
+      result[mod] = lvl;
+    }
+    return result;
+  }
+
+  /** 检查某条消息在当前模块设置下是否应输出 */
+  private _shouldLog(level: LogLevel, message: string): boolean {
+    const moduleName = extractModuleName(message);
+    let effectiveLevel = this.level;
+    if (moduleName && this._moduleLevels.has(moduleName)) {
+      effectiveLevel = this._moduleLevels.get(moduleName)!;
+    }
+    return LOG_LEVELS.indexOf(level) >= LOG_LEVELS.indexOf(effectiveLevel);
   }
 
   /** 设置单个日志文件最大大小（单位 MB） */
@@ -71,9 +127,46 @@ class Logger {
     this._logRetentionDays = days;
   }
 
-  /** 获取当前日志级别 */
-  getLevel(): LogLevel {
-    return this.level;
+  /** 设置缓冲区行数（设为 1 禁用缓冲，每次写入直接落盘） */
+  setBufferSize(lines: number) {
+    this._bufferSize = Math.max(1, lines);
+    this._bufferEnabled = lines > 1;
+  }
+
+  /** 强制将缓冲区内容写入磁盘 */
+  flush(): void {
+    if (this._buffer.length === 0) return;
+    const lines = this._buffer.splice(0, this._buffer.length);
+    try {
+      const logFile = this.getLogFilePath();
+      this.checkRotation();
+      fs.appendFileSync(logFile, lines.join(''), 'utf-8');
+    } catch (err) {
+      console.error(`[Logger] buffer flush error: ${err}`);
+    }
+  }
+
+  /** 启动定时刷盘 */
+  private _startFlushTimer() {
+    if (this._flushTimer) clearInterval(this._flushTimer);
+    this._flushTimer = setInterval(() => {
+      if (this._bufferEnabled && this._buffer.length > 0) {
+        this.flush();
+      }
+    }, this._flushIntervalMs);
+    // 不让定时器阻止进程退出
+    if (this._flushTimer && typeof this._flushTimer === 'object' && 'unref' in this._flushTimer) {
+      this._flushTimer.unref();
+    }
+  }
+
+  /** 停止定时刷盘（进程退出前调用） */
+  close(): void {
+    this.flush();
+    if (this._flushTimer) {
+      clearInterval(this._flushTimer);
+      this._flushTimer = null;
+    }
   }
 
   /** 获取当日日志文件路径 */
@@ -132,16 +225,20 @@ class Logger {
 
   /**
    * 执行轮转：
-   *   1. 删除最旧的 .N.gz（若存在）
-   *   2. 现有 .N.gz 编号后移
-   *   3. 压缩当前日志为 .1.gz
-   *   4. 清空当前日志文件
+   *   1. 先刷盘
+   *   2. 删除最旧的 .N.gz（若存在）
+   *   3. 现有 .N.gz 编号后移
+   *   4. 压缩当前日志为 .1.gz
+   *   5. 清空当前日志文件
    *
    * 线程安全：通过 _rotating 互斥锁防止并发轮转
    */
   private performRotation(logFile: string, isErrorLog: boolean) {
     this._rotating = true;
     const baseName = logFile;
+
+    // 先刷盘，确保缓冲区的日志全部写入后才轮转
+    this.flush();
 
     // 删除最旧的文件
     const oldestGz = `${baseName}.${this.maxRotatedFiles}.gz`;
@@ -202,24 +299,36 @@ class Logger {
     }
   }
 
+  /** 写入单行日志到缓冲区（或直接写入文件） */
+  private _writeLine(logFile: string, line: string): void {
+    if (this._bufferEnabled) {
+      this._buffer.push(line + '\n');
+      if (this._buffer.length >= this._bufferSize) {
+        this.flush();
+      }
+    } else {
+      fs.appendFileSync(logFile, line + '\n', 'utf-8');
+    }
+  }
+
   /** 写入错误日志到单独文件 */
   private writeErrorToFile(timestamp: string, level: LogLevel, content: string) {
     const errFile = this.getErrorLogFilePath();
     ensureLogDir(this.errorLogDir);
     const line = `[${timestamp}] [${level.toUpperCase()}] ${content}`;
-    // 错误日志也参与轮转检查
+    // 错误日志也参旋轮转检查
     if (fs.existsSync(errFile)) {
       const stats = fs.statSync(errFile);
       if (stats.size >= this.maxFileSize) {
         this.performRotation(errFile, true);
       }
     }
-    fs.appendFileSync(errFile, line + '\n', 'utf-8');
+    this._writeLine(errFile, line);
   }
 
   private write(level: LogLevel, message: string, ...args: unknown[]) {
-    const levels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
-    if (levels.indexOf(level) < levels.indexOf(this.level)) return;
+    // 模块级级别过滤
+    if (!this._shouldLog(level, message)) return;
 
     const timestamp = new Date().toISOString();
     const content = args.length > 0
@@ -235,10 +344,9 @@ class Logger {
       level === 'debug' ? '🔍' : '📋';
     console.log(`${prefix} ${line}`);
 
-    // 文件写入（按日切割 + 大小轮转）
+    // 文件写入（通过缓冲区）
     const logFile = this.getLogFilePath();
-    this.checkRotation();
-    fs.appendFileSync(logFile, line + '\n', 'utf-8');
+    this._writeLine(logFile, line);
 
     // 错误日志文件：ERROR 级别全部写入，WARN 级别按频率过滤
     if (level === 'error') {
@@ -296,11 +404,9 @@ function formatArg(arg: unknown): string {
 
 /** 提取 WARN 消息的去重 key（提取 [XXX] 标签 + 前 40 个字作为 key） */
 function extractWarnKey(message: string): string | null {
-  // 提取 [Agent] [LMStudio] [Diag] 等标签
   const tagMatch = message.match(/\[([^\]]+)\]/);
   if (!tagMatch) return null;
   const tag = tagMatch[0];
-  // 取标签后的前 40 个字符作为内容 key
   const contentKey = message.slice(tag.length).trim().substring(0, 40);
   return `${tag} ${contentKey}`;
 }
