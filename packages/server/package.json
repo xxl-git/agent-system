@@ -1,12 +1,16 @@
 {
-  "name": "@agent-system/server",
-  "version": "0.9.2",
-  "description": "Agent HTTP server — API, dashboard, session store",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc",
-    "clean": "rmdir /s /q dist 2>nul & exit /b 0"
-  },
-  "license": "MIT"
+    "name":  "@agent-system/server",
+    "version":  "0.9.2",
+    "description":  "Agent HTTP server — API, dashboard, session store",
+    "main":  "dist/index.js",
+    "types":  "dist/index.d.ts",
+    "scripts":  {
+                    "build":  "tsc",
+                    "clean":  "rmdir /s /q dist 2\u003enul \u0026 exit /b 0"
+                },
+    "license":  "MIT",
+    "dependencies":  {
+                         "@agent-system/events":  "*",
+                         "@agent-system/core":  "*"
+                     }
 }

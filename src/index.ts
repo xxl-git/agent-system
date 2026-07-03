@@ -1,67 +1,69 @@
-// Agent System — Phase 4 入口
+// Agent System — CLI entry point
 import * as readline from 'readline';
-import { loadConfig } from './config';
-import { logger } from './logger';
-import { initMemoryStore } from './memory/file-store';
-import { AgentCore } from './core/agent/agent-core';
+import { initConfig, logger } from '@agent-system/core';
+import { initMemoryStore } from '@agent-system/memory';
+import { AgentCore } from '@agent-system/core';
 
 async function main() {
-  console.log('╔══════════════════════════════════════════╗');
-  console.log('║     Agent System v0.3.0 — Phase 4        ║');
-  console.log('║ 多Agent协作 · 技能生态 · 智能路由 · 项目管理 ║');
-  console.log('╚══════════════════════════════════════════╝');
+  console.log('╔════════════════════════════════════════╗');
+  console.log('║     Agent System v0.9.2                        ║');
+  console.log('║  Phase 5: router+skills+multi-agent+resilience  ║');
+  console.log('╚════════════════════════════════════════╝');
   console.log('');
 
-  const config = loadConfig();
-  logger.setLevel(config.logging.level as 'debug' | 'info' | 'warn' | 'error');
+  const config = initConfig();
+  logger.setLevel(config.logging?.level || 'info');
 
-  initMemoryStore(config.memory.filePath);
+  initMemoryStore(config.memory?.filePath || 'data/memory');
   const agent = new AgentCore();
   const recoveryMsg = await agent.init();
 
   if (recoveryMsg) {
-    console.log(recoveryMsg);
     console.log('');
+    console.log(`📦 Recovery: ${recoveryMsg}`);
   }
 
-  console.log('✅ Agent 就绪。');
-  console.log('命令: /help /status /project /models /router /skills /agents');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  console.log('');
+  console.log('Agent core initialized. Type /help for commands.');
+  console.log('');
 
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: 'Agent> ',
   });
 
+  rl.setPrompt('agent> ');
   rl.prompt();
 
-  rl.on('line', async (line) => {
-    const input = line.trim();
-    if (input === '/exit' || input === '/quit') {
-      agent.stop();
-      console.log('再见 👋');
-      rl.close();
-      process.exit(0);
+  rl.on('line', async (input) => {
+    const trimmed = input.trim();
+    if (!trimmed) {
+      rl.prompt();
+      return;
     }
-    if (!input) { rl.prompt(); return; }
+
     try {
-      const reply = await agent.sendMessage(input);
-      console.log(`\nAgent: ${reply}\n`);
-    } catch (err) {
-      console.log(`\n❌ 错误: ${err}\n`);
+      const response = await agent.sendMessage(trimmed);
+      console.log('');
+      console.log(`Agent: ${response}`);
+      console.log('');
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error(`Error: ${error.message}`);
     }
+
     rl.prompt();
   });
 
   rl.on('close', () => {
-    agent.stop();
-    console.log('\nAgent System 已关闭。');
+    console.log('');
+    console.log('Goodbye!');
     process.exit(0);
   });
 }
 
-main().catch((err) => {
-  console.error('启动失败:', err);
+main().catch((err: unknown) => {
+  const error = err instanceof Error ? err : new Error(String(err));
+  console.error('Fatal error:', error);
   process.exit(1);
 });

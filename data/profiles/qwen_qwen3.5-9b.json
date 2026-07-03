@@ -271,14 +271,22 @@
       "toolCalls": 0,
       "toolErrors": 0,
       "timestamp": "2026-06-30T03:14:32.318Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 6116,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-07-03T01:09:57.120Z"
     }
   ],
   "stats": {
-    "totalInteractions": 19,
+    "totalInteractions": 20,
     "successRate": 1,
-    "avgDurationMs": 120831.73684210527,
+    "avgDurationMs": 115095.95,
     "toolErrorRate": 0,
-    "lastUsed": "2026-06-30T03:14:32.318Z",
+    "lastUsed": "2026-07-03T01:09:57.120Z",
     "preferredTasks": [
       "unknown",
       "chat"
@@ -286,5 +294,5 @@
   },
   "stage": "learning",
   "createdAt": "2026-06-20T01:31:28.387Z",
-  "updatedAt": "2026-06-30T03:14:32.318Z"
+  "updatedAt": "2026-07-03T01:09:57.120Z"
 }

@@ -8,3 +8,9 @@ export { getContextManager } from './core/context-manager';
 export { Orchestrator } from './core/orchestrator';
 export { IntentParser } from './core/intent-parser';
 export { TaskDecomposer } from './core/task-decomposer';
+
+// Config exports
+export { initConfig, getConfig } from './config';
+
+// Logger export
+export { default as logger, logContext } from './logger';

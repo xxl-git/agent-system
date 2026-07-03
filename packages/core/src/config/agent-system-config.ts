@@ -42,6 +42,11 @@ export interface AgentSystemConfig {
     maxFileSizeMB: number;
     maxRotatedFiles: number;
   };
+  server?: {
+    port?: number;
+    chatTimeoutMs?: number;
+    maxUploadSizeMB?: number;
+  };
   agent: {
     loopIntervalMs: number;
     heartbeatIntervalMs: number;
