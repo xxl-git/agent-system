@@ -4,7 +4,7 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AgentCore } from '../core/agent/agent-core';
-import { agentEventBus } from '../core/agent-event-bus';
+import { agentEventBus } from '@agent-system/events';
 import { loadConfig, getConfig } from '../config';
 import { logger, logContext } from '../logger';
 import { getFullDashboard, getProjectsSummary, getSkillsSummary, getAuditSummary, getModelSummary, getHealthSummary, getMemorySummary, getContextSummary, getFileListing, getLogStatus, getResilienceSummary } from './dashboard-api';
@@ -520,7 +520,7 @@ const server = http.createServer(async (req, res) => {
   // API: GET /api/trace — 获取最新 trace 报告
   if (url === '/api/trace' && isGet()) {
     try {
-      const tracerModule = require('../resilience/tracer');
+      const tracerModule = require('@agent-system/resilience');
       const report = tracerModule.getTraceReport();
       if (!report) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -545,7 +545,7 @@ const server = http.createServer(async (req, res) => {
   // API: GET /api/trace/list — 最近 trace 列表
   if (url === '/api/trace/list' && isGet()) {
     try {
-      const tracerModule = require('../resilience/tracer');
+      const tracerModule = require('@agent-system/resilience');
       const traces = tracerModule.getRecentTraces(20);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ traces }));
@@ -560,7 +560,7 @@ const server = http.createServer(async (req, res) => {
   if (url.startsWith('/api/trace/') && isGet()) {
     try {
       const sessionId = url.split('/')[3];
-      const tracerModule = require('../resilience/tracer');
+      const tracerModule = require('@agent-system/resilience');
       const report = tracerModule.getTraceReport(sessionId);
       if (!report) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -585,7 +585,7 @@ const server = http.createServer(async (req, res) => {
   // API: GET /api/assembly — 最新消息装配流水线
   if (url === '/api/assembly' && isGet()) {
     try {
-      const inspector = require('../resilience/assembly-inspector');
+      const inspector = require('@agent-system/resilience');
       const report = inspector.getAssemblyReport();
       if (!report) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -605,7 +605,7 @@ const server = http.createServer(async (req, res) => {
   if (url.startsWith('/api/assembly/') && isGet()) {
     try {
       const sessionId = url.split('/')[3];
-      const inspector = require('../resilience/assembly-inspector');
+      const inspector = require('@agent-system/resilience');
       const report = inspector.getAssemblyReport(sessionId);
       if (!report) {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });

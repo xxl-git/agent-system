@@ -12,6 +12,7 @@ export interface Logger {
   warn(msg: string, ...args: any[]): void;
   error(msg: string, ...args: any[]): void;
   debug(msg: string, ...args: any[]): void;
+  setTraceId?(traceId: string): void;
 }
 
 class SimpleLogger implements Logger {

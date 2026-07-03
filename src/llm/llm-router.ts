@@ -1,8 +1,8 @@
 // 统一 LLM 调用路由 — 所有 LLM 调用的唯一入口
 // 职责：广播 model_payload（全链路可观测）+ 按任务类型自动参数
 import type { ChatMessage, ChatCompletionResponse } from '../models/adapters/lmstudio';
-import { SmartAdapter } from '../core/smart-adapter';
-import { agentEventBus, type LLMTaskType, type ModelPayloadEvent } from '../core/agent-event-bus';
+import { SmartAdapter } from '@agent-system/llm';
+import { agentEventBus, type LLMTaskType, type ModelPayloadEvent } from '@agent-system/events';
 import logger from '../logger';
 
 export interface LLMCallRequest {
