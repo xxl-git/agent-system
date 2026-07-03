@@ -1,8 +1,8 @@
 // 记忆摘要引擎 — 自动将对话蒸馏为结构化知识
 // 触发: 会话结束自动 / /summarize 命令 / 心跳巡检长会话
 // v2: 使用 PromptRegistry 获取提示词模板
-import { getDBStore, type DecisionRecord } from './db-store';
-import logger from '../logger';
+import { getDBStore, type DecisionRecord } from '@agent-system/memory';
+import { logger } from '@agent-system/memory';
 
 export interface SummaryOutput {
   /** 会话摘要 (1-3句) */

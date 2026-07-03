@@ -19,8 +19,8 @@ export interface PromptRegistry {
 /** 默认实现：使用根项目的 LLMRouter */
 export class DefaultLLMClient implements LLMClient {
   async call(messages: ChatMessage[]): Promise<string> {
-    // 延迟导入，避免编译时依赖
-    const { getLLMRouter } = require('../../../src/llm/llm-router');
+    // 使用 @agent-system/llm 包
+    const { getLLMRouter } = require('@agent-system/llm');
     const router = getLLMRouter();
     const response = await router.call({ taskType: 'chat', messages });
     return response.content;
@@ -30,8 +30,8 @@ export class DefaultLLMClient implements LLMClient {
 /** 默认实现：使用根项目的 PromptRegistry */
 export class DefaultPromptRegistry implements PromptRegistry {
   get(templateId: string, variables?: Record<string, string>): { system?: string; user?: string } {
-    // 延迟导入
-    const { getPromptRegistry } = require('../../../src/prompts/registry');
+    // 使用 @agent-system/prompts 包
+    const { getPromptRegistry } = require('@agent-system/prompts');
     const registry = getPromptRegistry();
     return registry.get(templateId, variables);
   }

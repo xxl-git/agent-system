@@ -10,11 +10,10 @@
 //   1. 用户 /exp edit <id>   →  加载已有经验 → LLM 加工为草稿 → 展示
 //   2. 用户 /exp confirm     →  更新已有经验
 
-import { getExperienceStore } from './store';
-import { getExperienceExtractor } from './extractor';
-import { getExperienceRetriever } from './retriever';
-import logger from '../logger';
-import type { ExtractedExperience, RetrieveResult, ExperienceRecord, ExperienceInput } from './types';
+import { getExperienceStore } from '@agent-system/experience';
+import { getExperienceExtractor } from '@agent-system/experience';
+import { getExperienceRetriever } from '@agent-system/experience';
+import type { ExtractedExperience, RetrieveResult, ExperienceRecord, ExperienceInput } from '@agent-system/experience';
 
 // ─── 草稿状态 ─────────────────────────────────────────────────────────────────
 

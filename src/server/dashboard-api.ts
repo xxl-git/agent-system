@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getConfig } from '../config';
 import { logger } from '../logger';
-import { getContextManager } from '../core/context-manager';
+import { getContextManager } from '@agent-system/core';
 
 // 动态读取 package.json 版本
 let _cachedVersion: string = '0.9.2';

@@ -3,7 +3,7 @@
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AgentCore } from '../core/agent/agent-core';
+import { AgentCore } from '@agent-system/core';
 import { agentEventBus } from '@agent-system/events';
 import { loadConfig, getConfig } from '../config';
 import { logger, logContext } from '../logger';

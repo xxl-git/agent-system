@@ -6,10 +6,10 @@
 import type { ChatMessage } from '../models/adapters/lmstudio';
 import { getLLMRouter } from '@agent-system/llm';
 import { getPromptRegistry } from '@agent-system/prompts';
-import { getExperienceStore } from './store';
-import { getExperienceRetriever } from './retriever';
-import logger from '../logger';
-import type { ExperienceInput, ExperienceOutcome, ExtractedExperience, ExperienceType, RetrieveResult } from './types';
+import { getExperienceStore } from '@agent-system/experience';
+import { getExperienceRetriever } from '@agent-system/experience';
+import { logger } from '@agent-system/experience';
+import type { ExperienceInput, ExperienceOutcome, ExtractedExperience, ExperienceType, RetrieveResult } from '@agent-system/experience';
 
 // ─── ExperienceExtractor ──────────────────────────────────────────────────────
 

@@ -1,10 +1,10 @@
 // 跨会话记忆恢复 — 加载历史决策/实体/摘要，注入 system prompt
 // Phase 5 P1: 解决重启失忆
-import { getDBStore, type DecisionRecord, type EntityRecord, type SummaryRecord } from './db-store';
-import { getMemoryStore } from './file-store';
+import { getDBStore, type DecisionRecord, type EntityRecord, type SummaryRecord } from '@agent-system/memory';
+import { getMemoryStore } from '@agent-system/memory';
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs';
 import * as path from 'path';
-import logger from '../logger';
+import { logger } from '@agent-system/memory';
 
 export interface MemoryInjection {
   /** 最近决策（按时间倒序） */

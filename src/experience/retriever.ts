@@ -2,9 +2,9 @@
 // 三层降级检索：标签精确 → 关键词模糊 → 语义匹配（暂不实现 embedding）
 // 按 score 排序取 Top-K
 
-import { getExperienceStore } from './store';
-import logger from '../logger';
-import type { ExperienceRecord, RetrieveOptions, RetrieveResult } from './types';
+import { getExperienceStore } from '@agent-system/experience';
+import { logger } from '@agent-system/experience';
+import type { ExperienceRecord, RetrieveOptions, RetrieveResult } from '@agent-system/experience';
 
 // ─── ExperienceRetriever ─────────────────────────────────────────────────────
 

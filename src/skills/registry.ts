@@ -1,9 +1,9 @@
-﻿// 技能注册表 (Phase 3)
+// 技能注册表 (Phase 3)
 // 技能发现、注册、查找
 import * as fs from 'fs';
 import * as path from 'path';
-import type { SkillMeta } from './types';
-import logger from '../logger';
+import type { SkillMeta } from '@agent-system/skills';
+import { logger } from '@agent-system/skills';
 
 export class SkillRegistry {
   private registry: Map<string, SkillMeta> = new Map();

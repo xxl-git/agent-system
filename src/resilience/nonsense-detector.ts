@@ -1,8 +1,8 @@
 // 会话完成检测器 — 模型响应异常时自动记录并触发电空闲诊断
 // 职责：全程 10s 轮询 · 会话生命周期跟踪 · 异常快照 · P0 空闲任务
 // 所有阈值和规则从 config/agent-system.yaml 读取，用户可编辑。
-import logger from '../logger';
-import { getIdleTaskManager, IdleTaskManager } from './idle-task-manager';
+import { logger } from '@agent-system/resilience';
+import { getIdleTaskManager, IdleTaskManager } from '@agent-system/resilience';
 import { getNonsenseConfig, getConfig, CompiledNonsenseConfig } from '../config/agent-system-config';
 import * as fs from 'fs';
 import * as path from 'path';

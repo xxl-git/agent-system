@@ -1,33 +1,33 @@
 {
-  "name": "@agent-system/experience",
-  "version": "0.1.0",
-  "description": "Experience management module for Agent System - extract, store, retrieve experiences",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "tsc",
-    "clean": "Remove-Item -Path dist -Recurse -Force",
-    "test": "echo \"No tests yet\""
-  },
-  "dependencies": {
-    "js-yaml": "^4.2.0",
-    "sql.js": "^1.14.1"
-  },
-  "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
-    "@types/node": "^22.20.0",
-    "@types/sql.js": "^1.4.11",
-    "typescript": "^5.9.3"
-  },
-  "keywords": [
-    "agent",
-    "experience",
-    "memory",
-    "llm"
-  ],
-  "author": "Agent System Team",
-  "license": "MIT"
+    "name":  "@agent-system/experience",
+    "version":  "0.1.0",
+    "description":  "Experience management module for Agent System - extract, store, retrieve experiences",
+    "main":  "dist/index.js",
+    "types":  "dist/index.d.ts",
+    "files":  [
+                  "dist"
+              ],
+    "scripts":  {
+                    "build":  "tsc",
+                    "clean":  "Remove-Item -Path dist -Recurse -Force",
+                    "test":  "echo \"No tests yet\""
+                },
+    "dependencies":  {
+                         "js-yaml":  "^4.2.0",
+                         "sql.js":  "^1.14.1"
+                     },
+    "devDependencies":  {
+                            "@types/js-yaml":  "^4.0.9",
+                            "@types/node":  "^22.20.0",
+                            "@types/sql.js":  "^1.4.11",
+                            "typescript":  "^5.9.3"
+                        },
+    "keywords":  [
+                     "agent",
+                     "experience",
+                     "memory",
+                     "llm"
+                 ],
+    "author":  "Agent System Team",
+    "license":  "MIT"
 }

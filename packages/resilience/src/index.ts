@@ -22,3 +22,5 @@ export { Tracer, getTracer, finishTrace, getTraceReport } from './tracer';
 export type { TraceSpan, TraceReport } from './tracer';
 export { createAssemblyReport, addAssemblyStage, formatAssemblyReport, getAssemblyReport } from './assembly-inspector';
 export type { AssemblyReport, AssemblyStage } from './assembly-inspector';
+
+export { logger } from './logger';

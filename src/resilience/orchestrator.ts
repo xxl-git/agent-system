@@ -86,14 +86,14 @@
  */
 
 import { EventEmitter } from 'events';
-import { HealthMonitor, getHealthMonitor, type HealthEvent } from './health-monitor';
-import { RetryEngine, getRetryEngine, type ClassifiedFailure, type RecoveryAction } from './retry-engine';
-import { CircuitBreaker, getCircuitBreaker } from './circuit-breaker';
-import { CheckpointManager, getCheckpointManager, type CompletedStep, type FailureRecord } from './checkpoint';
-import { DegradationPath, getDegradationPath, type DegradationResult } from './degradation';
+import { HealthMonitor, getHealthMonitor, type HealthEvent } from '@agent-system/resilience';
+import { RetryEngine, getRetryEngine, type ClassifiedFailure, type RecoveryAction } from '@agent-system/resilience';
+import { CircuitBreaker, getCircuitBreaker } from '@agent-system/resilience';
+import { CheckpointManager, getCheckpointManager, type CompletedStep, type FailureRecord } from '@agent-system/resilience';
+import { DegradationPath, getDegradationPath, type DegradationResult } from '@agent-system/resilience';
 import type { SubTask, TaskDAG } from '@agent-system/resilience';
 import type { ChatMessage } from '../models/adapters/lmstudio';
-import logger from '../logger';
+import { logger } from '@agent-system/resilience';
 
 // --- 类型定义 ---
 

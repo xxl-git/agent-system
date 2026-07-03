@@ -31,3 +31,5 @@ export {
   ExperienceCommandHandler,
   getExperienceCommandHandler,
 } from './commands';
+
+export { logger } from './logger';

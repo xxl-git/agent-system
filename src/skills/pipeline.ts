@@ -1,11 +1,11 @@
 // 技能生态 — 审核器 + 开发器 + 测试器 + 装备器 (Phase 3)
-import type { SkillMeta, SkillApply, SkillAuditResult, SkillTestResult, SkillDangerLevel } from './types';
-import { getRegistry } from './registry';
+import type { SkillMeta, SkillApply, SkillAuditResult, SkillTestResult, SkillDangerLevel } from '@agent-system/skills';
+import { getRegistry } from '@agent-system/skills';
 import { getLLMRouter } from '@agent-system/llm';
 import type { ChatMessage } from '../models/adapters/lmstudio';
 import * as fs from 'fs';
 import * as path from 'path';
-import logger from '../logger';
+import { logger } from '@agent-system/skills';
 
 // ====== 自动审核器 ======
 

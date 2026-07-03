@@ -6,3 +6,5 @@ export { MemorySummarizer, getSummarizer } from './summarizer';
 export type { SummaryOutput, SummarizerConfig } from './summarizer';
 export { SessionRecoverer, getSessionRecoverer } from './session-recovery';
 export type { MemoryInjection, RecoveryConfig as SessionRecoveryConfig } from './session-recovery';
+
+export { logger } from './logger';

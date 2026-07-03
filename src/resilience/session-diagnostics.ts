@@ -1,9 +1,9 @@
 // 会话诊断 — 模型异常停止时自动记录和排查
 // 职责：记录待诊断快照 · 自动生成 P0 诊断任务 · 诊断分析引擎
-import logger from '../logger';
+import { logger } from '@agent-system/resilience';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getIdleTaskManager, IdleTaskManager } from './idle-task-manager';
+import { getIdleTaskManager, IdleTaskManager } from '@agent-system/resilience';
 import { getConfigSection } from '../config/agent-system-config';
 
 export interface DiagnosticSnapshot {

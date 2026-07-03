@@ -1,8 +1,8 @@
 // 技能缺口感知器 (Phase 3)
 // 执行失败/缺能力 → 自动标记缺口
-import type { SkillApply } from './types';
-import { getRegistry } from './registry';
-import logger from '../logger';
+import type { SkillApply } from '@agent-system/skills';
+import { getRegistry } from '@agent-system/skills';
+import { logger } from '@agent-system/skills';
 
 export interface GapContext {
   /** 什么操作触发了缺口 */
