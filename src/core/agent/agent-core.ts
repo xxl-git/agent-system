@@ -37,8 +37,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as path from 'path';
 import logger from '../../logger';
-import { getTracer, finishTrace } from '@agent-system/resilience';
-import { createAssemblyReport, addAssemblyStage, formatAssemblyReport, getAssemblyReport } from '@agent-system/resilience';
+import { getTracer, finishTrace } from '../../resilience/tracer';
+import { createAssemblyReport, addAssemblyStage, formatAssemblyReport, getAssemblyReport } from '../../resilience/assembly-inspector';
 
 class AgentCore {
     adapter;
