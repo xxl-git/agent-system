@@ -891,6 +891,111 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: POST /api/models/load — 加载模型到内存（LM Studio REST API）
+  if (url === '/api/models/load' && isPost()) {
+    try {
+      const body = await readBody(req);
+      const { model, context_length, flash_attention, eval_batch_size, num_experts } = JSON.parse(body);
+      if (!model) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: '参数 model 为必填' }));
+        return;
+      }
+      const options: any = {};
+      if (context_length) options.context_length = context_length;
+      if (typeof flash_attention === 'boolean') options.flash_attention = flash_attention;
+      if (eval_batch_size) options.eval_batch_size = eval_batch_size;
+      if (num_experts) options.num_experts = num_experts;
+      // 优先使用 agent 实例，回退到直接 fetch
+      let result: any;
+      if (agent && agentReady) {
+        try {
+          result = await agent.adapter.loadModel(model, options);
+        } catch (err: any) {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, error: err.message || '加载失败' }));
+          return;
+        }
+      } else {
+        // 回退：直接调用 LM Studio REST API
+        const cfg = getConfig();
+        const restUrl = (cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1').replace(/\/v1\/?$/, '/api/v1');
+        const loadRes = await fetch(`${restUrl}/models/load`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, ...options }),
+          signal: AbortSignal.timeout(120000),
+        });
+        if (!loadRes.ok) {
+          const errText = await loadRes.text().catch(() => '');
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, error: `Load failed (${loadRes.status}): ${errText}` }));
+          return;
+        }
+        result = await loadRes.json();
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        ok: true,
+        model,
+        instance_id: result.instance_id,
+        load_time_seconds: result.load_time_seconds,
+        status: result.status,
+        type: result.type,
+      }));
+    } catch (err: any) {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: err.message || '加载失败' }));
+    }
+    return;
+  }
+
+  // API: POST /api/models/unload — 从内存卸载模型
+  if (url === '/api/models/unload' && isPost()) {
+    try {
+      const body = await readBody(req);
+      const { instance_id } = JSON.parse(body);
+      if (!instance_id) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: '参数 instance_id 为必填' }));
+        return;
+      }
+      // 优先使用 agent 实例，回退到直接 fetch
+      let result: any;
+      if (agent && agentReady) {
+        try {
+          result = await agent.adapter.unloadModel(instance_id);
+        } catch (err: any) {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, error: err.message || '卸载失败' }));
+          return;
+        }
+      } else {
+        const cfg = getConfig();
+        const restUrl = (cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1').replace(/\/v1\/?$/, '/api/v1');
+        const unloadRes = await fetch(`${restUrl}/models/unload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ instance_id }),
+          signal: AbortSignal.timeout(30000),
+        });
+        if (!unloadRes.ok) {
+          const errText = await unloadRes.text().catch(() => '');
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, error: `Unload failed (${unloadRes.status}): ${errText}` }));
+          return;
+        }
+        result = await unloadRes.json();
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true, instance_id: result.instance_id }));
+    } catch (err: any) {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: false, error: err.message || '卸载失败' }));
+    }
+    return;
+  }
+
   // API: POST /api/config — 更新配置
   if (url === '/api/config' && isPost()) {
     try {

@@ -295,6 +295,18 @@ export class SmartAdapter {
   }
   async getCurrentModel() { return this.raw.getCurrentModel(); }
   setModel(name: string) { this.raw.setModel(name); }
+  async loadModel(modelKey: string, options?: any) {
+    if (typeof (this.raw as any).loadModel === 'function') {
+      return (this.raw as any).loadModel(modelKey, options);
+    }
+    throw new Error('当前适配器不支持加载模型操作');
+  }
+  async unloadModel(instanceId: string) {
+    if (typeof (this.raw as any).unloadModel === 'function') {
+      return (this.raw as any).unloadModel(instanceId);
+    }
+    throw new Error('当前适配器不支持卸载模型操作');
+  }
 
   /** 设置 reasoning 级别（委托给底层适配器） */
   setReasoning(level: 'off' | 'low' | 'medium' | 'high' | 'on'): void {

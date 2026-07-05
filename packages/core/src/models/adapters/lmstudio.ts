@@ -442,6 +442,63 @@ export class LMStudioAdapter {
     logger.info(`[LMStudio] 模型切换: ${modelName}`);
   }
 
+  /**
+   * 加载模型到内存（LM Studio REST API）
+   * @param modelKey 模型标识符（如 'qwen/qwen3-1.7b'）
+   * @param options 可选参数：context_length, flash_attention, eval_batch_size, num_experts
+   * @returns 加载结果，包含 instance_id 和 load_time_seconds
+   */
+  async loadModel(modelKey: string, options?: {
+    context_length?: number;
+    flash_attention?: boolean;
+    eval_batch_size?: number;
+    num_experts?: number;
+    offload_kv_cache_to_gpu?: boolean;
+  }): Promise<{
+    type: string;
+    instance_id: string;
+    load_time_seconds: number;
+    status: string;
+  }> {
+    const body: any = { model: modelKey, ...options };
+    logger.info(`[LMStudio] 加载模型: ${modelKey}`, options || {});
+    const res = await fetch(`${this.v1BaseUrl}/models/load`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120000), // 加载大模型可能需要较长时间
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Load failed (${res.status}): ${errText}`);
+    }
+    const result: any = await res.json();
+    logger.info(`[LMStudio] 模型加载完成: ${modelKey} -> ${result.instance_id} (${result.load_time_seconds}s)`);
+    return result;
+  }
+
+  /**
+   * 从内存卸载模型（LM Studio REST API）
+   * @param instanceId 模型实例 ID（通常等于模型 key）
+   * @returns 卸载结果
+   */
+  async unloadModel(instanceId: string): Promise<{ instance_id: string }> {
+    logger.info(`[LMStudio] 卸载模型: ${instanceId}`);
+    const res = await fetch(`${this.v1BaseUrl}/models/unload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instance_id: instanceId }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`Unload failed (${res.status}): ${errText}`);
+    }
+    const result: any = await res.json();
+    logger.info(`[LMStudio] 模型已卸载: ${instanceId}`);
+    return result;
+  }
+
   /** 适配器本身作为 chatFn 注入到探针 */
   asChatFn() {
     return (messages: ChatMessage[]) => this.chat(messages);

@@ -1625,8 +1625,8 @@ function renderModelDropdown() {
         // 未加载模型显示名称和参数信息
         const displayName = m.display_name && m.display_name !== m.id ? `<span style="opacity:0.6;font-size:10px">${m.display_name}</span>` : '';
         const quant = m.quantization ? `<span style="opacity:0.3;font-size:9px">${m.quantization}</span>` : '';
-        // 未加载模型不可点击切换，提示用户先加载
-        const clickHandler = isLoaded ? `onclick="selectModel('${m.id}')"` : 'onclick="showToast(\'⚠️ 请先在 LM Studio 中加载此模型\', \'warn\')" style="opacity:0.5"';
+        // 未加载模型：点击弹出加载对话框
+        const clickHandler = isLoaded ? `onclick="selectModel('${m.id}')"` : `onclick="confirmLoadModel('${m.id}', ${m.contextLength || 0}, '${(m.display_name || '').replace(/'/g, "\\'")}')"`;
         html += `<div class="ms-item${sel}" ${clickHandler}>
           <span class="ms-provider local">${isLoaded ? '本地' : '未加载'}</span><span>${m.id}</span>${displayName}${ctx}${arch}${quant}${onlineDot}${check}
         </div>`;
@@ -1652,6 +1652,69 @@ function renderModelDropdown() {
   html += `<div class="ms-add-api" onclick="openProviderModal()">＋ 添加在线 API 模型</div>`;
   html += `<div class="ms-manage" onclick="openProviderModal()">⚙ 管理自定义 API</div>`;
   dd.innerHTML = html;
+}
+
+/** 确认加载未加载的模型 */
+function confirmLoadModel(modelId, contextLength, displayName) {
+  const name = displayName || modelId;
+  const ctxInfo = contextLength ? `\n📏 上下文长度: ${(contextLength/1000).toFixed(0)}K tokens` : '';
+  if (confirm(`加载模型到内存\n\n📦 模型: ${modelId}${ctxInfo}\n\n⚠️ 加载过程可能需要 10-60 秒（取决于模型大小和磁盘速度）。\n加载完成后将自动切换到该模型。\n\n确认加载吗？`)) {
+    loadModelToMemory(modelId, contextLength);
+  }
+}
+
+/** 调用 LM Studio REST API 加载模型到内存 */
+async function loadModelToMemory(modelId, contextLength) {
+  showToast(`⏳ 正在加载 ${modelId}...`);
+  try {
+    const resp = await fetch('/api/models/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelId,
+        context_length: contextLength || undefined,
+        flash_attention: true,
+      }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      const loadTime = data.load_time_seconds ? ` (${data.load_time_seconds}s)` : '';
+      showToast(`✅ 模型已加载: ${modelId}${loadTime}`);
+      // 自动切换到刚加载的模型
+      setTimeout(() => selectModel(modelId), 500);
+      // 刷新模型列表
+      setTimeout(() => fetchModels(), 1000);
+    } else {
+      showToast('❌ 加载失败: ' + (data.error || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('❌ 加载请求失败: ' + e.message, 'error');
+  }
+}
+
+/** 卸载已加载的模型 */
+async function unloadModelFromMemory(modelId) {
+  if (!confirm(`卸载模型\n\n📦 模型: ${modelId}\n\n卸载后模型将从内存中移除，但文件仍保留在磁盘上。\n如果这是当前使用的模型，卸载后无法继续对话。\n\n确认卸载吗？`)) {
+    return;
+  }
+  showToast(`⏳ 正在卸载 ${modelId}...`);
+  try {
+    const resp = await fetch('/api/models/unload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instance_id: modelId }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      showToast(`✅ 已卸载: ${modelId}`);
+      // 刷新模型列表
+      setTimeout(() => fetchModels(), 500);
+    } else {
+      showToast('❌ 卸载失败: ' + (data.error || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('❌ 卸载请求失败: ' + e.message, 'error');
+  }
 }
 
 async function selectModel(modelId, providerId) {
