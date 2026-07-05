@@ -135,18 +135,22 @@ export class SmartAdapter {
   }
 
   private async callWithTimeout(messages: ChatMessage[]): Promise<ChatCompletionResponse> {
-    return new Promise(async (resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('TimeoutError')), this.config.callTimeoutMs);
-      try {
-        const result = await this.raw.chat(messages);
-        clearTimeout(timer);
-        resolve(result);
-      } catch (err) {
-        clearTimeout(timer);
-        reject(err);
-      }
-    });
-  }
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), this.config.callTimeoutMs);
+        try {
+            const result = await Promise.race([
+                this.raw.chat(messages),
+                new Promise<never>((_, reject) => {
+                    controller.signal.addEventListener('abort', () => reject(new Error('TimeoutError')));
+                })
+            ]);
+            clearTimeout(timer);
+            return result;
+        } catch (err) {
+            clearTimeout(timer);
+            throw err;
+        }
+    }
 
   private filterValidToolCalls(toolCalls?: Array<{ function?: { name?: string; arguments?: string } }>): Array<{ function: { name: string; arguments: string } }> {
     if (!toolCalls || !Array.isArray(toolCalls)) return [];
@@ -154,12 +158,9 @@ export class SmartAdapter {
   }
 
   private degradedFallback(userInput: string): string {
-    const input = userInput.toLowerCase();
-    if (input.startsWith('/')) return '';
-    if (input.includes('天气') || input.includes('weather')) return '抱歉，当前无法获取实时天气数据。';
-    if (input.includes('你好') || input.includes('hi') || input.includes('hello')) return '你好！当前 LLM 服务暂不可用。';
-    if (input.length < 10) return '收到。当前模型服务正在恢复中，请稍候。';
-    return `[降级响应] 已收到您的消息（${userInput.length}字）。当前模型服务暂不可用。`;
+    if (userInput.startsWith('/')) return '';
+    const preview = userInput.length <= 50 ? userInput : userInput.substring(0, 50) + '...';
+    return `[降级响应] 已收到您的消息（${preview}）。当前模型服务暂不可用，请稍后重试。`;
   }
 
   async ping(): Promise<boolean> { return this.raw.ping(); }
@@ -178,7 +179,54 @@ export class SmartAdapter {
   reset() { this.consecutiveEmpties = 0; this.consecutiveSimilar = 0; this.recentResponses = []; }
 
   async *chatStream(messages: ChatMessage[]): AsyncGenerator<string> {
-    yield* this.raw.chatStream(messages);
+    let streamError: any = null;
+    try {
+      yield* this.raw.chatStream(messages);
+    } catch (err: any) {
+      streamError = err;
+    }
+
+    if (streamError) {
+      const isNetwork = /ECONNREFUSED|ECONNRESET|fetch failed|network|connection/i.test(streamError.message || '');
+
+      // 网络错误：重试 1 次
+      if (isNetwork) {
+        logger.warn(`[SmartAdapter][stream] 网络错误，等待 3s 后重试非流式: ${streamError.message}`);
+        await this.sleep(3000);
+        try {
+          const result = await this.chat(messages);
+          const content = result.choices?.[0]?.message?.content || '';
+          if (content) {
+            const chunkSize = 20;
+            for (let i = 0; i < content.length; i += chunkSize) {
+              yield content.slice(i, i + chunkSize);
+            }
+            return;
+          }
+        } catch (retryErr: any) {
+          logger.error(`[SmartAdapter][stream] 重试也失败: ${retryErr.message}`);
+        }
+      }
+
+      // 非网络错误或重试也失败：尝试非流式回退
+      try {
+        logger.warn(`[SmartAdapter][stream] 流式失败，回退到非流式: ${streamError.message}`);
+        const result = await this.chat(messages);
+        const content = result.choices?.[0]?.message?.content || '';
+        if (content) {
+          const chunkSize = 20;
+          for (let i = 0; i < content.length; i += chunkSize) {
+            yield content.slice(i, i + chunkSize);
+          }
+          return;
+        }
+      } catch (fallbackErr: any) {
+        logger.error(`[SmartAdapter][stream] 非流式回退也失败: ${fallbackErr.message}`);
+      }
+
+      // 所有回退失败，抛出原始错误
+      throw streamError;
+    }
   }
 
   private checkRepetition(content: string): { isRepeat: boolean; reason: string; deduped?: string } {

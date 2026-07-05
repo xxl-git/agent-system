@@ -1,4 +1,4 @@
-{
+﻿﻿﻿{
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
@@ -14,8 +14,11 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "composite": true
+    "composite": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/dist/**"]
 }
+
+
+

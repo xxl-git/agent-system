@@ -34,6 +34,7 @@ export interface ChatHandlerDeps {
     projectManager: any; // 项目管理器
     isMultiAgentTask: (message: string) => boolean; // 是否多Agent任务
     handleMultiAgentTask: (intent: any, rawMessage: string) => Promise<string>; // 处理多Agent任务
+    circuitBreaker?: any; // 熔断器（可选，兼容旧代码）
 }
 
 export class ChatHandler {
@@ -53,6 +54,13 @@ export class ChatHandler {
         this.deps.nonsenseDetector.markConversationStart(userInput);
         let chatOutput = '';
         let chatError = null;
+        // 熔断器预检
+        const cb = (this.deps as any).circuitBreaker;
+        if (cb && !cb.canUseModel(this.deps.adapter.model)) {
+            logger.warn(`[ChatHandler] ⛔ 模型 ${this.deps.adapter.model} 已熔断`);
+            return '模型服务当前不可用（已熔断）。请稍后重试或输入 /status 查看系统状态。';
+        }
+
         try {
             const result = await this.deps.recovery.executeProtected(async () => {
                 logger.info('[ChatHandler] handle() 开始执行 protected 逻辑');
@@ -60,6 +68,7 @@ export class ChatHandler {
                 this.deps.sessionDiag.recordPing(alive);
                 if (!alive) {
                     this.deps.healthMon.recordPing(false);
+                    if (cb) cb.modelFailure(this.deps.adapter.model, 'ping failed');
                     throw new Error('model_unreachable');
                 }
                 this.deps.healthMon.recordPing(true);
@@ -147,8 +156,11 @@ export class ChatHandler {
                     this.deps.healthMon.endTokenStream();
                 }
             }, { taskId: 'chat-' + Date.now() });
+            if (cb) cb.modelSuccess(this.deps.adapter.model);
             chatOutput = this.deps.formatRecoveryResult(result);
         } catch (err) {
+            if (cb) cb.modelFailure(this.deps.adapter.model, err.message || 'unknown');
+            this.deps.healthMon.recordPing(false);
             chatOutput = `ERR: ${err.message || 'unknown error'}`;
             chatError = err.message || 'unknown error';
         }
@@ -172,12 +184,20 @@ export class ChatHandler {
         let chatOutput = '';
         let chatError = null;
         const streamStartTime = Date.now();
+        // 熔断器预检
+        const cb2 = (this.deps as any).circuitBreaker;
+        if (cb2 && !cb2.canUseModel(this.deps.adapter.model)) {
+            logger.warn(`[ChatHandler][stream] ⛔ 模型 ${this.deps.adapter.model} 已熔断`);
+            return '模型服务当前不可用（已熔断）。请稍后重试。';
+        }
+
         try {
             chatOutput = await this.deps.recovery.executeProtected(async () => {
                 const alive = await this.deps.adapter.ping();
                 this.deps.sessionDiag.recordPing(alive);
                 if (!alive) {
                     this.deps.healthMon.recordPing(false);
+                    if (cb2) cb2.modelFailure(this.deps.adapter.model, 'ping failed');
                     throw new Error('model_unreachable');
                 }
                 this.deps.healthMon.recordPing(true);
@@ -239,15 +259,28 @@ export class ChatHandler {
                             metadata: { assembler: assembled.metadata },
                         })) {
                             fullReply += chunk;
+                            this.deps.healthMon.beat();
                             this.deps.agentEventBus.emitChatChunk(chunk);
                         }
                     } catch (streamErr) {
-                        // 流式中断：如果有部分内容，保留并标记
                         if (fullReply.length > 0) {
-                            logger.warn(`[ChatHandler][stream] 流式中断，保留已有内容 (${fullReply.length}字): ${streamErr}`);
+                            logger.warn(`[ChatHandler][stream] 流式中断，保留已有内容 (${fullReply.length}字)`);
                             this.deps.agentEventBus.emitChatError(streamErr.message || 'stream interrupted');
                         } else {
-                            throw streamErr;
+                            // 无内容：尝试非流式回退
+                            const isNetwork = /ECONNREFUSED|ECONNRESET|fetch failed|network/i.test(streamErr.message || '');
+                            if (isNetwork) {
+                                await new Promise(r => setTimeout(r, 3000));
+                            }
+                            try {
+                                const fallbackResp = await llm_router_1.getLLMRouter().call({
+                                    taskType: 'chat',
+                                    messages: assembled.messages,
+                                });
+                                fullReply = fallbackResp.choices?.[0]?.message?.content || '';
+                                if (!fullReply) throw streamErr;
+                                logger.info(`[ChatHandler][stream] 非流式回退成功 (${fullReply.length}字)`);
+                            } catch { throw streamErr; }
                         }
                     }
                     const duration = Date.now() - streamStartTime;
@@ -256,9 +289,12 @@ export class ChatHandler {
                 } finally {
                     this.deps.healthMon.endTokenStream();
                 }
-            }, { taskId: 'chat-stream-' + Date.now() });
+            }, { taskId: 'chat-stream-' + Date.now(), context: { model: this.deps.adapter.model } });
+            if (cb2) cb2.modelSuccess(this.deps.adapter.model);
             chatOutput = this.deps.formatRecoveryResult(chatOutput);
         } catch (err) {
+            if (cb2) cb2.modelFailure(this.deps.adapter.model, err.message || 'unknown');
+            this.deps.healthMon.recordPing(false);
             chatOutput = `ERR: ${err.message || 'unknown error'}`;
             chatError = err.message || 'unknown error';
             this.deps.agentEventBus.emitChatError(chatError);
@@ -294,6 +330,7 @@ export function createChatHandlerFromAgentCore(agent: any): ChatHandler {
         recovery: agent.recovery,
         auditLog: agent.auditLog,
         sessionDiag: agent.sessionDiag,
+        circuitBreaker: agent.circuitBreaker,
         formatRecoveryResult: agent.formatRecoveryResult.bind(agent),
         getIdentityVars: agent.getIdentityVars.bind(agent),
         _cachedMemoryBlock: agent._cachedMemoryBlock,
@@ -301,6 +338,7 @@ export function createChatHandlerFromAgentCore(agent: any): ChatHandler {
         projectManager: agent.projectManager,
         isMultiAgentTask: agent.isMultiAgentTask.bind(agent),
         handleMultiAgentTask: agent.handleMultiAgentTask.bind(agent),
+        circuitBreaker: agent.circuitBreaker,
     };
     return new ChatHandler(deps);
 }

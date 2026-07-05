@@ -321,14 +321,16 @@ export class LMStudioAdapter {
   /** 获取 LM Studio 中加载的模型列表 */
   async listModels(): Promise<LMStudioModel[]> {
     try {
-      // v1 API 的模型列表路径为 /api/v1/models
-      const res = await fetch(`${this.v1BaseUrl}/models`, {
+      // 使用 OpenAI 兼容端点获取已加载的模型列表（/v1/models）
+      // 注意：v1BaseUrl（/api/v1/models）返回所有可用模型，不区分是否已加载
+      const res = await fetch(`${this.baseUrl}/models`, {
         signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) return [];
 
       const json: any = await res.json();
-      const list: LMStudioModel[] = Array.isArray(json.data) ? json.data : Array.isArray(json) ? json : [];
+      // OpenAI 兼容格式: { data: [{ id, object, ... }] }
+      const list: LMStudioModel[] = Array.isArray(json.data) ? json.data : [];
       return list;
     } catch (err) {
       logger.warn('[LMStudio] 获取模型列表失败', err);

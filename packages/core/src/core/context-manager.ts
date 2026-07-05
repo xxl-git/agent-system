@@ -10,6 +10,7 @@
 
 import type { ChatMessage } from '../models/adapters/lmstudio';
 import logger from '../logger';
+import { getPromptRegistry } from '@agent-system/prompts';
 
 // ═════════════════════════════════════════════════
 // Types
@@ -102,10 +103,15 @@ export const DEFAULT_CONTEXT_CONFIG: ContextConfig = {
 // ═════════════════════════════════════════════════
 
 export function estimateTokens(text: string): number {
-  if (!text) return 0;
-  // 中文约 1 字 ≈ 1.5 tokens，英文约 1 词 ≈ 1.3 tokens
-  // 简估：字符数 / 0.75
-  return Math.ceil(text.length * 1.35);
+    if (!text) return 0;
+    let cjk = 0, ascii = 0, other = 0;
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        if (code >= 0x4E00 && code <= 0x9FFF) cjk++;
+        else if (code <= 0x7F) ascii++;
+        else other++;
+    }
+    return Math.ceil(cjk * 1.5 + ascii * 0.25 + other * 0.5);
 }
 
 function estimateMessagesTokens(msgs: ChatMessage[]): number {
@@ -244,14 +250,24 @@ export function buildCompressionPrompt(msgs: ChatMessage[]): string {
     const roleTag = m.role === 'user' ? '用户' : m.role === 'assistant' ? '助手' : '系统';
     return `[${roleTag}] ${m.content}`;
   });
+  const conversationHistory = lines.join('\n');
 
-  return `请压缩以下对话历史为精炼摘要（中文，200字以内），并提取：
-1. 讨论的核心主题（逗号分隔）
-2. 做出的决策和结论（逐条列出）
-3. 涉及的实体/工具/关键词
+  // 使用 PromptRegistry 模板（如果可用），否则回退到硬编码
+  try {
+    const registry = getPromptRegistry();
+    const tpl = registry.get('context.summarize', { conversationHistory });
+    if (tpl.system && tpl.system.includes('对话历史')) {
+      return tpl.system;
+    }
+  } catch {
+    // registry 不可用时回退
+  }
+
+  // 兜底：直接拼接
+  return `请压缩以下对话历史为精炼摘要（中文，200字以内），并提取关键信息。
 
 对话历史：
-${lines.join('\n')}
+${conversationHistory}
 
 输出格式（不要加多余内容）：
 摘要：<精炼摘要>

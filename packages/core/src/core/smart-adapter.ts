@@ -239,24 +239,11 @@ export class SmartAdapter {
 
   /** 带超时的单次调用（委托给下层适配器，不重复 HTTP 逻辑） */
   private async callWithTimeout(messages: ChatMessage[]): Promise<ChatCompletionResponse> {
-    return new Promise(async (resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error('TimeoutError: SmartAdapter call timed out'));
-      }, this.config.callTimeoutMs);
-
-      try {
-        logger.debug(`[SmartAdapter] >> calling raw.chat() msgs=${messages.length}`);
-        const result = await this.raw.chat(messages);
-        logger.debug(`[SmartAdapter] << raw.chat() done choices=${result.choices?.length}`);
-        clearTimeout(timer);
-        resolve(result);
-      } catch (err) {
-        clearTimeout(timer);
-        logger.debug('[SmartAdapter] Promise.race timeout cleanup 异常', err);
-        reject(err);
-      }
-    });
-  }
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('TimeoutError: SmartAdapter call timed out')), this.config.callTimeoutMs);
+        });
+        return Promise.race([this.raw.chat(messages), timeoutPromise]);
+    }
 
   /** 过滤有效的 tool_calls（去掉空/无函数名的） */
   private filterValidToolCalls(toolCalls?: Array<{ function?: { name?: string; arguments?: string } }>): Array<{ function: { name: string; arguments: string } }> {

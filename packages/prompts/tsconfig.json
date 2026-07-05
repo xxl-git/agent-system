@@ -1,4 +1,4 @@
-{
+﻿﻿﻿{
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
@@ -18,3 +18,7 @@
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
 }
+
+
+
+

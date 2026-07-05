@@ -101,6 +101,19 @@ header .model-badge:hover { border-color: rgba(99,102,241,0.3); background: var(
 .model-badge.local .provider-tag { background: rgba(34,197,94,0.12); color: var(--green); }
 .model-badge.remote .provider-tag { background: rgba(245,158,11,0.12); color: var(--amber); }
 .model-badge .model-name { overflow: hidden; text-overflow: ellipsis; }
+.model-badge .model-status-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  transition: background 0.4s;
+}
+.model-badge .model-status-dot.online { background: var(--green); }
+.model-badge .model-status-dot.online::after {
+  content: ''; position: absolute; inset: -2px; border-radius: 50%;
+  background: rgba(34,197,94,0.25); animation: pulse 2s ease-in-out infinite;
+}
+.model-badge .model-status-dot.offline { background: var(--red); }
+.status-bar .model-online-indicator { font-size: 9px; padding: 1px 6px; border-radius: 8px; font-weight: 600; }
+.status-bar .model-online-indicator.online { color: var(--green); background: rgba(34,197,94,0.1); }
+.status-bar .model-online-indicator.offline { color: var(--red); background: rgba(239,68,68,0.1); }
 
 header nav {
   margin-left: auto; display: flex; gap: 2px;
@@ -136,6 +149,27 @@ header nav .nav-btn.active { color: var(--accent); background: var(--accent-dim)
   padding: 3px 6px; border-radius: 4px; font-size: 13px; transition: var(--transition);
 }
 .status-bar-right button:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ═══ Context Usage in Status Bar ═══ */
+.status-bar .ctx-item {
+  display: flex; align-items: center; gap: 5px; white-space: nowrap;
+}
+.status-bar .ctx-item .val { color: var(--text-dim); font-weight: 500; }
+.status-bar .ctx-progress-wrap {
+  display: flex; align-items: center; gap: 5px;
+}
+.status-bar .ctx-progress {
+  width: 60px; height: 6px; border-radius: 3px;
+  background: rgba(255,255,255,0.06); overflow: hidden; position: relative;
+}
+.status-bar .ctx-progress-bar {
+  height: 100%; border-radius: 3px;
+  background: var(--green); transition: width 0.5s ease, background 0.3s;
+}
+.status-bar .ctx-progress-bar.warn { background: var(--amber); }
+.status-bar .ctx-progress-bar.danger { background: var(--red); }
+.status-bar .ctx-pct { font-size: 9px; color: var(--text-dim); font-weight: 500; min-width: 30px; }
+.status-bar .ctx-max { font-size: 9px; color: var(--text-muted); }
 
 /* ═══ Chat Container ═══ */
 .chat-wrapper { flex: 1; position: relative; overflow: hidden; }
@@ -968,6 +1002,7 @@ code.inline {
   <h1>Agent System</h1>
   <div class="model-badge local" id="modelBadge" onclick="toggleModelSelector(event)" title="点击切换模型">
     <span class="provider-tag">本地</span>
+    <span class="model-status-dot" id="modelStatusDot"></span>
     <span class="model-name" id="modelNameDisplay">加载中...</span>
     <span style="font-size:8px;opacity:.5">▾</span>
   </div>
@@ -985,6 +1020,7 @@ code.inline {
   <span class="stat-item" id="statusModelInfo">
     <span class="label">模型:</span>
     <span class="val" id="statusModelVal">-</span>
+    <span class="model-online-indicator" id="modelOnlineIndicator">检测中</span>
   </span>
   <span class="sep">|</span>
   <span class="stat-item" id="statusSessionInfo">
@@ -1000,6 +1036,19 @@ code.inline {
   <span class="stat-item" id="statusResponseTime" style="display:none">
     <span class="label">响应:</span>
     <span class="val" id="statusResponseTimeVal">-</span>
+  </span>
+  <span class="sep">|</span>
+  <span class="ctx-item" id="statusContextInfo" title="上下文使用情况">
+    <span class="label">上下文:</span>
+    <span class="val" id="statusCtxUsed">-</span>
+    <span class="ctx-max">/</span>
+    <span class="ctx-max" id="statusCtxMax">-</span>
+    <div class="ctx-progress-wrap">
+      <div class="ctx-progress">
+        <div class="ctx-progress-bar" id="statusCtxBar" style="width:0%"></div>
+      </div>
+      <span class="ctx-pct" id="statusCtxPct">-</span>
+    </div>
   </span>
   <div class="model-selector" id="modelSelector">
     <div class="ms-dropdown" id="msDropdown"></div>
@@ -1222,7 +1271,7 @@ const chat = document.getElementById('chat'), input = document.getElementById('i
 const sendBtn = document.getElementById('sendBtn'), stopBtn = document.getElementById('stopBtn');
 let sending = false, genAbort = null;
 
-let availableModels = [], currentModel = 'unknown', lmStudioConnected = false;
+let availableModels = [], currentModel = 'unknown', lmStudioConnected = false, currentModelOnline = false;
 
 // ═══ Agent 实时状态条 ═══
 const STATUS_MAP = {
@@ -1406,8 +1455,52 @@ setInterval(() => {
   }).catch(() => {});
 }, 2000);
 
+// ═══ Context Usage Polling ═══
+function updateContextDisplay(data) {
+  try {
+    const ctx = data.context || {};
+    const cfg = ctx.config || {};
+    const maxTokens = cfg.maxTokens || ctx.maxTokens || 0;
+    const effectiveWindow = ctx.effectiveWindow || 0;
+    const threshold = cfg.compressionThreshold || ctx.compressionThreshold || 0.75;
+    const pct = maxTokens > 0 ? Math.round((effectiveWindow / maxTokens) * 100) : 0;
+    const thresholdPct = Math.round(threshold * 100);
+
+    document.getElementById('statusCtxUsed').textContent = effectiveWindow.toLocaleString();
+    document.getElementById('statusCtxMax').textContent = maxTokens.toLocaleString() + ' tok';
+    document.getElementById('statusCtxPct').textContent = pct + '%';
+
+    const bar = document.getElementById('statusCtxBar');
+    bar.style.width = Math.min(pct, 100) + '%';
+    bar.className = 'ctx-progress-bar' +
+      (pct >= thresholdPct + 15 ? ' danger' : pct >= thresholdPct ? ' warn' : '');
+
+    document.getElementById('statusContextInfo').title =
+      '上下文: ' + effectiveWindow.toLocaleString() + ' / ' + maxTokens.toLocaleString() + ' tokens (' + pct + '%)\n' +
+      '压缩阈值: ' + thresholdPct + '% (' + Math.round(maxTokens * threshold).toLocaleString() + ' tokens)';
+  } catch (e) {}
+}
+
+setInterval(() => {
+  fetch('/api/dashboard').then(r => r.json()).then(data => {
+    updateContextDisplay(data);
+  }).catch(() => {});
+}, 5000);
+
 // ═══ Models ═══
 let providersList = [];
+
+function updateModelOnlineIndicator() {
+  const indicator = document.getElementById('modelOnlineIndicator');
+  if (!indicator) return;
+  if (currentModelOnline) {
+    indicator.textContent = '在线';
+    indicator.className = 'model-online-indicator online';
+  } else {
+    indicator.textContent = '离线';
+    indicator.className = 'model-online-indicator offline';
+  }
+}
 
 async function fetchModels() {
   try {
@@ -1421,7 +1514,9 @@ async function fetchModels() {
     providersList = data.providers || [];
     currentModel = data.current || 'unknown';
     lmStudioConnected = data.connected !== false;
+    currentModelOnline = data.currentModelOnline === true;
     updateModelBadge(currentModel);
+    updateModelOnlineIndicator();
     renderModelDropdown();
     document.getElementById('statusModelVal').textContent = currentModel;
     const sel = document.getElementById('cfgModel');
@@ -1462,6 +1557,11 @@ function updateModelBadge(id) {
   const isRemote = providersList.some(p => p.type !== 'local' && availableModels.some(m => m.id === id && m.provider !== 'lmstudio'));
   badge.className = 'model-badge ' + (isRemote ? 'remote' : 'local');
   badge.querySelector('.provider-tag').textContent = isRemote ? '远程' : '本地';
+  // 更新在线状态小圆点
+  const statusDot = document.getElementById('modelStatusDot');
+  if (statusDot) {
+    statusDot.className = 'model-status-dot ' + (currentModelOnline ? 'online' : 'offline');
+  }
   // 如果 LM Studio 未连接，添加视觉提示
   if (!lmStudioConnected && !isRemote) {
     badge.style.opacity = '0.6';
@@ -1508,8 +1608,10 @@ function renderModelDropdown() {
         const check = m.id === currentModel ? '<span class="ms-check">✓</span>' : '';
         const ctx = m.contextLength ? `<span style="opacity:0.5;font-size:9px">${(m.contextLength/1000).toFixed(0)}K ctx</span>` : '';
         const arch = m.arch && m.arch !== 'unknown' ? `<span style="opacity:0.4;font-size:9px">${m.arch}</span>` : '';
+        const isCurrentOnline = (m.id === currentModel && currentModelOnline);
+        const onlineDot = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:4px;background:${m.id === currentModel ? (currentModelOnline ? 'var(--green)' : 'var(--red)') : 'var(--green)'}" title="${m.id === currentModel ? (currentModelOnline ? '当前模型在线' : '当前模型离线') : '已加载'}"></span>`;
         html += `<div class="ms-item${sel}" onclick="selectModel('${m.id}')">
-          <span class="ms-provider local">本地</span><span>${m.id}</span>${ctx}${arch}${check}
+          <span class="ms-provider local">本地</span><span>${m.id}</span>${ctx}${arch}${onlineDot}${check}
         </div>`;
       });
     }
@@ -1546,7 +1648,9 @@ async function selectModel(modelId, providerId) {
     const data = await resp.json();
     if (data.ok) {
       currentModel = modelId;
+      currentModelOnline = true;
       updateModelBadge(modelId);
+      updateModelOnlineIndicator();
       renderModelDropdown();
       document.getElementById('statusModelVal').textContent = modelId;
       document.getElementById('modelSelector').classList.remove('open');
@@ -1580,7 +1684,9 @@ async function refreshModels() {
       }));
       lmStudioConnected = data.connected !== false;
       currentModel = data.current || currentModel;
+      currentModelOnline = data.currentModelOnline === true;
       updateModelBadge(currentModel);
+      updateModelOnlineIndicator();
       renderModelDropdown();
       const sel = document.getElementById('cfgModel');
       if (sel) {

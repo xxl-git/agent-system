@@ -35,7 +35,6 @@ import * as experience_1 from '@agent-system/experience';
 import { toolRegistry } from '@agent-system/tools';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as path from 'path';
 import logger from '../../logger';
 import { getTracer, finishTrace, createAssemblyReport, addAssemblyStage, formatAssemblyReport, getAssemblyReport } from '@agent-system/resilience';
 
@@ -507,6 +506,20 @@ class AgentCore {
         let chatOutput = '';
         let chatError = null;
         try {
+            // 熔断器预检：避免向已知故障模型发送请求
+            if (!this.circuitBreaker.canUseModel(this.adapter.model)) {
+                logger.warn(`[Agent] ⛔ 模型 ${this.adapter.model} 已熔断，尝试恢复...`);
+                const cbResult = await this.recovery.executeProtected(async () => {
+                    const alive = await this.adapter.ping();
+                    if (!alive) throw new Error('model_unreachable (circuit breaker)');
+                    this.circuitBreaker.modelSuccess(this.adapter.model);
+                    return '模型已恢复';
+                }, { taskId: 'cb-recovery-' + Date.now() });
+                if (!cbResult.success) {
+                    return '模型服务当前不可用（已熔断）。请稍后重试或输入 /status 查看系统状态。';
+                }
+            }
+
             const result = await this.recovery.executeProtected(async () => {
                 const aliveT0 = Date.now();
                 const alive = await this.adapter.ping();
@@ -514,6 +527,7 @@ class AgentCore {
                 this.sessionDiag.recordPing(alive);
                 if (!alive) {
                     this.healthMon.recordPing(false);
+                    this.circuitBreaker.modelFailure(this.adapter.model, 'ping failed');
                     throw new Error('model_unreachable');
                 }
                 this.healthMon.recordPing(true);
@@ -645,11 +659,15 @@ class AgentCore {
                 finally {
                     this.healthMon.endTokenStream();
                 }
-            }, { taskId: 'chat-' + Date.now() });
+            }, { taskId: 'chat-' + Date.now(), context: { model: this.adapter.model } });
+            // 熔断器反馈：记录成功
+            this.circuitBreaker.modelSuccess(this.adapter.model);
             chatOutput = this.formatRecoveryResult(result);
         }
         catch (err) {
             logger.error('[Agent] handleChat() 执行失败', err);
+            this.circuitBreaker.modelFailure(this.adapter.model, err.message || 'unknown');
+            this.healthMon.recordPing(false);
             chatOutput = `ERR: ${err.message || 'unknown error'}`;
             chatError = err.message || 'unknown error';
         }
@@ -767,6 +785,20 @@ class AgentCore {
         let chatError = null;
         const streamStartTime = Date.now();
         try {
+            // 熔断器预检
+            if (!this.circuitBreaker.canUseModel(this.adapter.model)) {
+                logger.warn(`[Agent][stream] ⛔ 模型 ${this.adapter.model} 已熔断`);
+                const cbResult = await this.recovery.executeProtected(async () => {
+                    const alive = await this.adapter.ping();
+                    if (!alive) throw new Error('model_unreachable (circuit breaker)');
+                    this.circuitBreaker.modelSuccess(this.adapter.model);
+                    return 'ok';
+                }, { taskId: 'cb-stream-recovery-' + Date.now() });
+                if (!cbResult.success) {
+                    return '模型服务当前不可用（已熔断）。请稍后重试。';
+                }
+            }
+
             chatOutput = await this.recovery.executeProtected(async () => {
                 const aliveT0 = Date.now();
                 const alive = await this.adapter.ping();
@@ -774,6 +806,7 @@ class AgentCore {
                 this.sessionDiag.recordPing(alive);
                 if (!alive) {
                     this.healthMon.recordPing(false);
+                    this.circuitBreaker.modelFailure(this.adapter.model, 'ping failed');
                     throw new Error('model_unreachable');
                 }
                 this.healthMon.recordPing(true);
@@ -834,6 +867,7 @@ class AgentCore {
                             metadata: { assembler: assembled.metadata },
                         })) {
                             fullReply += chunk;
+                            this.healthMon.beat();
                             agentEventBus.emitChatChunk(chunk);
                         }
                     }
@@ -842,9 +876,27 @@ class AgentCore {
                         if (fullReply.length > 0) {
                             logger.warn(`[Agent][stream] 流式中断，保留已有内容 (${fullReply.length}字): ${streamErr}`);
                             agentEventBus.emitChatError(streamErr.message || 'stream interrupted');
-                        }
-                        else {
-                            throw streamErr;
+                        } else {
+                            // 无内容：尝试网络错重试 → 非流式回退
+                            const isNetwork = /ECONNREFUSED|ECONNRESET|fetch failed|network/i.test(streamErr.message || '');
+                            if (isNetwork) {
+                                logger.warn(`[Agent][stream] 网络错误，3s 后尝试非流式回退`);
+                                await new Promise(r => setTimeout(r, 3000));
+                            }
+                            try {
+                                const fallbackResp = await llm_router_1.getLLMRouter().call({
+                                    taskType: 'chat',
+                                    messages: assembled.messages,
+                                });
+                                fullReply = fallbackResp.choices?.[0]?.message?.content || '';
+                                if (fullReply) {
+                                    logger.info(`[Agent][stream] 非流式回退成功 (${fullReply.length}字)`);
+                                } else {
+                                    throw streamErr;
+                                }
+                            } catch (fallbackErr) {
+                                throw streamErr;
+                            }
                         }
                     }
                     const duration = Date.now() - streamStartTime;
@@ -854,11 +906,15 @@ class AgentCore {
                 finally {
                     this.healthMon.endTokenStream();
                 }
-            }, { taskId: 'chat-stream-' + Date.now() });
+            }, { taskId: 'chat-stream-' + Date.now(), context: { model: this.adapter.model } });
+            // 熔断器反馈：流式成功
+            this.circuitBreaker.modelSuccess(this.adapter.model);
             chatOutput = this.formatRecoveryResult(chatOutput);
         }
         catch (err) {
             logger.error('[Agent] handleChatStream() 执行失败', err);
+            this.circuitBreaker.modelFailure(this.adapter.model, err.message || 'unknown');
+            this.healthMon.recordPing(false);
             chatOutput = `ERR: ${err.message || 'unknown error'}`;
             chatError = err.message || 'unknown error';
             agentEventBus.emitChatError(chatError);
@@ -886,12 +942,14 @@ class AgentCore {
             this.sessionDiag.recordPing(alive);
             if (!alive) {
                 this.healthMon.recordPing(false);
+                this.circuitBreaker.modelFailure(this.adapter.model, 'ping failed (handleTask)');
                 this.sessionDiag.recordCircuitBreaker(this.adapter.model, 'LM Studio 不可达 (handleTask)');
                 taskOutput = 'WARN: LM Studio not connected.';
                 taskError = 'model_unreachable';
                 this.nonsenseDetector.markConversationEnd(false, rawMessage, taskOutput, taskError);
                 return taskOutput;
             }
+            this.circuitBreaker.modelSuccess(this.adapter.model);
             if (this.isMultiAgentTask(rawMessage)) {
                 logger.info('[Agent] │ └─ 检测为多Agent任务 → handleMultiAgentTask()');
                 taskOutput = await this.handleMultiAgentTask(intent, rawMessage);
@@ -957,8 +1015,15 @@ class AgentCore {
         return taskOutput;
     }
     isMultiAgentTask(input) {
-        const keywords = ['同时', '并行', '分别', '多个', '团队', '协作', '分工'];
-        return keywords.some(k => input.includes(k));
+        const patterns = [
+            /同时(?:执行|处理|完成|做)/,
+            /并行(?:执行|处理|运行|计算)/,
+            /分别(?:执行|处理|完成|负责|做)/,
+            /(?:需要|让我)(?:多个|几个)(?:agent|智能体|助手)(?:协同|合作|一起|分别)/,
+            /(?:团队|协作|分工)(?:完成|执行|处理|模式)/,
+            /分配(?:给|到)(?:不同|多个)/,
+        ];
+        return patterns.some(p => p.test(input));
     }
     async handleMultiAgentTask(intent, rawMessage) {
         logger.info('[Agent] multi-agent: ' + rawMessage.slice(0, 60));
