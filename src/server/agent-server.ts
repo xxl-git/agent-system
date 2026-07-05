@@ -34,16 +34,17 @@ const MIME: Record<string, string> = {
   '.mp4': 'video/mp4',
 };
 
-function serveStatic(res: http.ServerResponse, filePath: string) {
+async function serveStatic(res: http.ServerResponse, filePath: string) {
   try {
-    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    const stat = await fs.promises.stat(filePath).catch(() => null);
+    if (!stat || stat.isDirectory()) {
       res.writeHead(404);
       res.end('Not found');
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME[ext] || 'application/octet-stream';
-    const content = fs.readFileSync(filePath);
+    const content = await fs.promises.readFile(filePath);
     res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-cache, no-store, must-revalidate' });
     res.end(content);
   } catch {
@@ -166,7 +167,7 @@ const server = http.createServer(async (req, res) => {
   // API: GET /api/dashboard — 完整仪表盘数据
   if (url === '/api/dashboard' && isGet()) {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    const dash = getFullDashboard(agentReady ? agent : null);
+    const dash = await getFullDashboard(agentReady ? agent : null);
     res.end(JSON.stringify(dash));
     return;
   }
@@ -188,7 +189,7 @@ const server = http.createServer(async (req, res) => {
   // API: GET /api/dashboard/models — 模型状态
   if (url === '/api/dashboard/models' && isGet()) {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(getModelSummary(agentReady ? agent : null)));
+    res.end(JSON.stringify(await getModelSummary(agentReady ? agent : null)));
     return;
   }
 
@@ -635,54 +636,118 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // API: GET /api/models — 列出 LM Studio 中已加载的模型（含完整元数据）
+  // API: GET /api/models — 列出 LM Studio 中所有可用模型（含加载状态）
   if (url === '/api/models' && isGet()) {
     try {
       const cfg = getConfig();
       const providerUrl = cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1';
-      const lmRes = await fetch(`${providerUrl}/models`, { signal: AbortSignal.timeout(5000) });
-      const lmData: any = await lmRes.json();
-      const rawModels = lmData.data || [];
-      // 返回完整模型元数据
-      const models = rawModels.map((m: any) => ({
-        id: m.id,
-        object: m.object || 'model',
-        owned_by: m.owned_by || m.publisher || 'unknown',
-        context_length: m.context_length || 0,
-        arch: m.arch || 'unknown',
-        publisher: m.publisher || 'unknown',
-        type: m.type || 'llm',
-        loaded: true,  // /v1/models 只返回已加载的模型
-      }));
 
-      // 同时获取 agent 当前使用的模型名（从运行实例获取，而非静态配置）
+      // 优先使用 agent 实例的 listAllModels()，回退到直接 fetch
+      let models: any[] = [];
+      let connected = false;
+      if (agent && agentReady) {
+        try {
+          models = await agent.adapter.listAllModels();
+          connected = models.length > 0;
+        } catch {
+          // agent 未就绪时回退到直接 fetch
+        }
+      }
+
+      // 回退方案：直接调用 LM Studio API
+      if (models.length === 0) {
+        try {
+          // 1. 获取已加载模型 (/v1/models)
+          const lmRes = await fetch(`${providerUrl}/models`, { signal: AbortSignal.timeout(5000) });
+          const lmData: any = await lmRes.json();
+          const loadedIds = new Set((lmData.data || []).map((m: any) => m.id));
+          connected = lmData.data?.length > 0;
+
+          // 2. 获取所有可用模型 (/api/v1/models)
+          try {
+            const restRes = await fetch(`${providerUrl.replace('/v1', '/api/v1')}/models`, { signal: AbortSignal.timeout(8000) });
+            const restData: any = await restRes.json();
+            const restModels = restData.models || [];
+            models = restModels.map((m: any) => ({
+              id: m.key,
+              object: 'model',
+              type: m.type || 'llm',
+              publisher: m.publisher || 'unknown',
+              arch: m.architecture || 'unknown',
+              context_length: m.max_context_length || 0,
+              display_name: m.display_name,
+              quantization: m.quantization?.name,
+              params_string: m.params_string || undefined,
+              size_bytes: m.size_bytes,
+              loaded: (Array.isArray(m.loaded_instances) && m.loaded_instances.length > 0) || loadedIds.has(m.key),
+              capabilities: {
+                vision: m.capabilities?.vision || false,
+                trained_for_tool_use: m.capabilities?.trained_for_tool_use || false,
+                reasoning: !!m.capabilities?.reasoning,
+              },
+            }));
+            // 确保已加载但不在 REST 列表的模型也包含
+            for (const lm of (lmData.data || [])) {
+              if (!models.some(m => m.id === lm.id)) {
+                models.push({
+                  id: lm.id, object: 'model', type: 'llm',
+                  publisher: lm.owned_by || 'unknown', arch: 'unknown',
+                  context_length: 0, loaded: true,
+                });
+              }
+            }
+          } catch {
+            // REST API 不可用，只返回已加载模型
+            models = (lmData.data || []).map((m: any) => ({
+              id: m.id, object: 'model', type: 'llm',
+              publisher: m.owned_by || 'unknown', arch: 'unknown',
+              context_length: 0, loaded: true,
+            }));
+          }
+        } catch (err: any) {
+          const errMsg = err.message || '';
+          const isConnectionRefused = errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch failed');
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({
+            models: [],
+            current: 'unknown',
+            currentModelOnline: false,
+            error: isConnectionRefused ? 'LM Studio 服务未启动 (ECONNREFUSED)' : errMsg,
+            connected: false,
+            hint: isConnectionRefused ? '请启动 LM Studio 并加载模型' : undefined,
+          }));
+          return;
+        }
+      }
+
+      // 同时获取 agent 当前使用的模型名
       let currentModel = cfg.models?.providers?.lmstudio?.model || 'unknown';
       if (agent && agentReady) {
         try { currentModel = agent.adapter.model; } catch { /* ignore */ }
       }
 
+      const currentModelOnline = models.some((m: any) => m.id === currentModel && m.loaded);
+      const loadedCount = models.filter((m: any) => m.loaded).length;
+
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
         models,
         current: currentModel,
+        currentModelOnline,
         timeout: cfg.agent?.callTimeoutMs || 60000,
         lmStudioUrl: providerUrl,
-        connected: rawModels.length > 0,
+        connected,
+        loadedCount,
+        totalCount: models.length,
       }));
     } catch (err: any) {
-      const errMsg = err.message || '';
-      const isConnectionRefused = errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch failed') || errMsg.includes('aggregateError');
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({
         models: [],
         current: 'unknown',
-        error: isConnectionRefused
-          ? 'LM Studio 服务未启动 (ECONNREFUSED)'
-          : errMsg,
+        currentModelOnline: false,
+        error: err.message || 'unknown error',
         connected: false,
-        hint: isConnectionRefused
-          ? '请启动 LM Studio 并加载模型'
-          : undefined,
       }));
     }
     return;
@@ -796,10 +861,12 @@ const server = http.createServer(async (req, res) => {
         try { currentModel = agent.adapter.model; } catch { /* ignore */ }
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      const currentModelOnline = models.some((m: any) => m.id === currentModel);
       res.end(JSON.stringify({
         ok: true,
         models,
         current: currentModel,
+        currentModelOnline,
         count: models.length,
         connected: models.length > 0,
       }));
@@ -811,6 +878,7 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({
         ok: false,
         models: [],
+        currentModelOnline: false,
         error: isConnectionRefused
           ? 'LM Studio 服务未启动 (ECONNREFUSED)'
           : errMsg,
@@ -1179,7 +1247,7 @@ const server = http.createServer(async (req, res) => {
       res.end('Forbidden');
       return;
     }
-    serveStatic(res, staticPath);
+    await serveStatic(res, staticPath);
     return;
   }
 
@@ -1214,7 +1282,7 @@ const server = http.createServer(async (req, res) => {
     res.end('Forbidden: accessing restricted directory');
     return;
   }
-  serveStatic(res, staticPath);
+  await serveStatic(res, staticPath);
 
   }); // end logContext.run
 });

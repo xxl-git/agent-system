@@ -282,8 +282,17 @@ export class SmartAdapter {
     return this.raw.ping();
   }
 
-  /** 获取模型列表 */
+  /** 获取已加载模型列表 */
   async listModels() { return this.raw.listModels(); }
+  /** 获取所有可用模型（含加载状态） */
+  async listAllModels() { 
+    if (typeof (this.raw as any).listAllModels === 'function') {
+      return (this.raw as any).listAllModels(); 
+    }
+    // 非 LM Studio 适配器回退到 listModels
+    const models = await this.raw.listModels();
+    return models.map((m: any) => ({ ...m, loaded: true }));
+  }
   async getCurrentModel() { return this.raw.getCurrentModel(); }
   setModel(name: string) { this.raw.setModel(name); }
 

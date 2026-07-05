@@ -1602,16 +1602,33 @@ function renderModelDropdown() {
     // LM Studio 的模型优先
     const lmGroup = groups['lmstudio'];
     if (lmGroup) {
-      html += `<div class="ms-section-head">🔌 LM Studio ${lmStudioConnected ? '✅' : '❌'}</div>`;
-      lmGroup.models.forEach(m => {
+      const loadedCount = lmGroup.models.filter(m => m.loaded !== false).length;
+      const totalCount = lmGroup.models.length;
+      html += `<div class="ms-section-head">🔌 LM Studio ${lmStudioConnected ? '✅' : '❌'} <span style="opacity:0.5;font-weight:normal">${loadedCount}/${totalCount} 已加载</span></div>`;
+      // 已加载模型优先显示
+      const sortedModels = [...lmGroup.models].sort((a, b) => {
+        if (a.loaded === false && b.loaded !== false) return 1;
+        if (a.loaded !== false && b.loaded === false) return -1;
+        return 0;
+      });
+      sortedModels.forEach(m => {
         const sel = m.id === currentModel ? ' selected' : '';
         const check = m.id === currentModel ? '<span class="ms-check">✓</span>' : '';
         const ctx = m.contextLength ? `<span style="opacity:0.5;font-size:9px">${(m.contextLength/1000).toFixed(0)}K ctx</span>` : '';
         const arch = m.arch && m.arch !== 'unknown' ? `<span style="opacity:0.4;font-size:9px">${m.arch}</span>` : '';
+        const isLoaded = m.loaded !== false;
         const isCurrentOnline = (m.id === currentModel && currentModelOnline);
-        const onlineDot = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:4px;background:${m.id === currentModel ? (currentModelOnline ? 'var(--green)' : 'var(--red)') : 'var(--green)'}" title="${m.id === currentModel ? (currentModelOnline ? '当前模型在线' : '当前模型离线') : '已加载'}"></span>`;
-        html += `<div class="ms-item${sel}" onclick="selectModel('${m.id}')">
-          <span class="ms-provider local">本地</span><span>${m.id}</span>${ctx}${arch}${onlineDot}${check}
+        // 加载状态指示器：已加载=绿色, 未加载=灰色, 当前模型=动态判断
+        const dotColor = !isLoaded ? 'var(--text-muted)' : (m.id === currentModel ? (currentModelOnline ? 'var(--green)' : 'var(--red)') : 'var(--green)');
+        const dotTitle = !isLoaded ? '未加载' : (m.id === currentModel ? (currentModelOnline ? '当前模型在线' : '当前模型离线') : '已加载');
+        const onlineDot = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:4px;background:${dotColor}" title="${dotTitle}"></span>`;
+        // 未加载模型显示名称和参数信息
+        const displayName = m.display_name && m.display_name !== m.id ? `<span style="opacity:0.6;font-size:10px">${m.display_name}</span>` : '';
+        const quant = m.quantization ? `<span style="opacity:0.3;font-size:9px">${m.quantization}</span>` : '';
+        // 未加载模型不可点击切换，提示用户先加载
+        const clickHandler = isLoaded ? `onclick="selectModel('${m.id}')"` : 'onclick="showToast(\'⚠️ 请先在 LM Studio 中加载此模型\', \'warn\')" style="opacity:0.5"';
+        html += `<div class="ms-item${sel}" ${clickHandler}>
+          <span class="ms-provider local">${isLoaded ? '本地' : '未加载'}</span><span>${m.id}</span>${displayName}${ctx}${arch}${quant}${onlineDot}${check}
         </div>`;
       });
     }

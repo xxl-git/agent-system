@@ -32,10 +32,20 @@ export interface ChatCompletionResponse {
 export interface LMStudioModel {
   id: string;
   object: 'model';
-  type: string;
+  type: string;          // 'llm' | 'embedding' | 'unknown'
   publisher: string;
   arch: string;
   context_length: number;
+  display_name?: string;  // 人类可读名称（如 'Qwen3.6 35B A3B'）
+  quantization?: string;  // 量化方式（如 'Q4_K_M'）
+  params_string?: string; // 参数量（如 '35B-A3B'）
+  size_bytes?: number;    // 模型文件大小
+  loaded: boolean;        // 是否已加载到内存
+  capabilities?: {
+    vision?: boolean;
+    trained_for_tool_use?: boolean;
+    reasoning?: boolean;
+  };
 }
 
 /** LM Studio v1 响应中的 output item 类型 */
@@ -318,23 +328,94 @@ export class LMStudioAdapter {
 
   // ── 模型发现 ──
 
-  /** 获取 LM Studio 中加载的模型列表 */
+  /**
+   * 获取 LM Studio 中已加载的模型列表（OpenAI 兼容端点 /v1/models）
+   * 只返回当前已加载到内存的模型
+   */
   async listModels(): Promise<LMStudioModel[]> {
     try {
-      // 使用 OpenAI 兼容端点获取已加载的模型列表（/v1/models）
-      // 注意：v1BaseUrl（/api/v1/models）返回所有可用模型，不区分是否已加载
       const res = await fetch(`${this.baseUrl}/models`, {
         signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) return [];
 
       const json: any = await res.json();
-      // OpenAI 兼容格式: { data: [{ id, object, ... }] }
       const list: LMStudioModel[] = Array.isArray(json.data) ? json.data : [];
       return list;
     } catch (err) {
-      logger.warn('[LMStudio] 获取模型列表失败', err);
+      logger.warn('[LMStudio] 获取已加载模型列表失败', err);
       return [];
+    }
+  }
+
+  /**
+   * 获取 LM Studio 中所有可用模型（含加载状态）
+   * 调用 LM Studio REST API (/api/v1/models)，返回本地所有已下载的模型，
+   * 通过 loaded_instances 字段判断是否已加载到内存。
+   * 同时合并 /v1/models 的在线状态以确保准确性。
+   */
+  async listAllModels(): Promise<LMStudioModel[]> {
+    try {
+      // 1. 获取已加载模型 ID 集合（用于准确判断加载状态）
+      const loadedModels = await this.listModels();
+      const loadedIds = new Set(loadedModels.map(m => m.id));
+
+      // 2. 获取所有可用模型（REST API）
+      const res = await fetch(`${this.v1BaseUrl}/models`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) {
+        // REST API 不可用时，只返回已加载模型
+        return loadedModels.map(m => ({ ...m, loaded: true }));
+      }
+
+      const json: any = await res.json();
+      const rawModels: any[] = Array.isArray(json.models) ? json.models : [];
+
+      // 3. 合并信息：以 loaded_instances 为主，/v1/models 为辅
+      const allModels: LMStudioModel[] = rawModels.map((m: any) => {
+        const hasLoadedInstance = Array.isArray(m.loaded_instances) && m.loaded_instances.length > 0;
+        const isLoaded = hasLoadedInstance || loadedIds.has(m.key);
+        // 从 loaded_instances 提取实际上下文长度（如果已加载）
+        let actualCtx = m.max_context_length || 0;
+        if (hasLoadedInstance) {
+          const inst = m.loaded_instances[0];
+          if (inst?.config?.context_length) {
+            actualCtx = inst.config.context_length;
+          }
+        }
+        return {
+          id: m.key,
+          object: 'model' as const,
+          type: m.type || 'llm',
+          publisher: m.publisher || 'unknown',
+          arch: m.architecture || 'unknown',
+          context_length: actualCtx,
+          display_name: m.display_name,
+          quantization: m.quantization?.name,
+          params_string: m.params_string || undefined,
+          size_bytes: m.size_bytes,
+          loaded: isLoaded,
+          capabilities: {
+            vision: m.capabilities?.vision || false,
+            trained_for_tool_use: m.capabilities?.trained_for_tool_use || false,
+            reasoning: !!m.capabilities?.reasoning,
+          },
+        };
+      });
+
+      // 4. 确保已加载但不在 REST API 列表中的模型也包含在内
+      for (const lm of loadedModels) {
+        if (!allModels.some(am => am.id === lm.id)) {
+          allModels.push({ ...lm, loaded: true });
+        }
+      }
+
+      return allModels;
+    } catch (err) {
+      logger.warn('[LMStudio] 获取所有模型列表失败，降级为已加载模型', err);
+      const loaded = await this.listModels();
+      return loaded.map(m => ({ ...m, loaded: true }));
     }
   }
 

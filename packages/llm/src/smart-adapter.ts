@@ -165,6 +165,13 @@ export class SmartAdapter {
 
   async ping(): Promise<boolean> { return this.raw.ping(); }
   async listModels() { return this.raw.listModels(); }
+  async listAllModels() {
+    if (typeof (this.raw as any).listAllModels === 'function') {
+      return (this.raw as any).listAllModels();
+    }
+    const models = await this.raw.listModels();
+    return models.map((m: any) => ({ ...m, loaded: true }));
+  }
   async getCurrentModel() { return this.raw.getCurrentModel(); }
   setModel(name: string) { this.raw.setModel(name); }
   setReasoning(level: 'off' | 'low' | 'medium' | 'high' | 'on'): void { this.raw.setReasoning(level); }
