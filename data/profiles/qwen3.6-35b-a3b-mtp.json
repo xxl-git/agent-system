@@ -297,20 +297,62 @@
       "toolCalls": 0,
       "toolErrors": 0,
       "timestamp": "2026-06-25T14:40:43.419Z"
+    },
+    {
+      "taskType": "chat|task|query",
+      "success": true,
+      "durationMs": 6237,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-07-04T04:54:37.049Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 63269,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-07-04T04:54:49.528Z"
+    },
+    {
+      "taskType": "unknown",
+      "success": true,
+      "durationMs": 14166,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-07-04T04:55:29.233Z"
+    },
+    {
+      "taskType": "query",
+      "success": true,
+      "durationMs": 11633,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-07-04T05:01:18.033Z"
+    },
+    {
+      "taskType": "chat",
+      "success": true,
+      "durationMs": 10338,
+      "toolCalls": 0,
+      "toolErrors": 0,
+      "timestamp": "2026-07-04T05:01:34.516Z"
     }
   ],
   "stats": {
-    "totalInteractions": 22,
+    "totalInteractions": 27,
     "successRate": 1,
-    "avgDurationMs": 14251.136363636364,
+    "avgDurationMs": 15524.74074074074,
     "toolErrorRate": 0,
-    "lastUsed": "2026-06-25T14:40:43.419Z",
+    "lastUsed": "2026-07-04T05:01:34.516Z",
     "preferredTasks": [
       "chat",
-      "unknown"
+      "unknown",
+      "chat|task|query",
+      "query"
     ]
   },
   "stage": "learning",
   "createdAt": "2026-06-23T15:26:05.354Z",
-  "updatedAt": "2026-06-25T14:40:43.419Z"
+  "updatedAt": "2026-07-04T05:01:34.516Z"
 }

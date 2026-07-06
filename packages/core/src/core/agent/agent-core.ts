@@ -1648,8 +1648,19 @@ class AgentCore {
         }
         if (args[0] === 'reset') {
             this.ctxManager.reset();
+            // 清理 messages 中的压缩摘要块
+            const summaryMarkers = ['[此前对话摘要', '[对话历史摘要', '[部分历史已截断', '[CONTEXT FROM PAST SESSIONS]'];
+            const before = this.messages.length;
+            this.messages = this.messages.filter(m => {
+                if (m.role === 'system') return true;
+                if (m.role === 'user' && typeof m.content === 'string') {
+                    return !summaryMarkers.some(marker => m.content.includes(marker));
+                }
+                return true;
+            });
+            const removed = before - this.messages.length;
             lines.push('');
-            lines.push('[✅ 上下文状态已重置]');
+            lines.push(`[✅ 上下文状态已重置，消息历史中清理了 ${removed} 个摘要块]`);
         }
         if (args[0] === 'blocks') {
             const blocks = this.ctxManager.getStats().compressedBlocks;

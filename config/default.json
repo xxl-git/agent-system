@@ -33,7 +33,7 @@
     "callTimeoutMs": 60000,
     "maxRetries": 1,
     "emptyLoopThreshold": 3,
-    "debugLogging": false
+    "debugLogging": true
   },
   "memory": {
     "filePath": "./memory",

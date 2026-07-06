@@ -183,22 +183,38 @@ export function getAuditSummary(): any {
 }
 
 // ─── 模型状态摘要 ───
-export function getModelSummary(agent?: any): any {
+export async function getModelSummary(agent?: any): Promise<any> {
   try {
     const model = agent?.adapter?.model || 'unknown';
     const stage = agent?.breakIn?.stage || 'unknown';
     const routerDecisions = agent?.router?.lastDecision || null;
     const profile = agent?.getModelProfile ? agent.getModelProfile() : null;
 
+    // 检测当前模型是否在线
+    let currentModelOnline = false;
+    let onlineCheckError: string | undefined;
+    try {
+      const cfg = getConfig();
+      const providerUrl = cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1';
+      const lmRes = await fetch(`${providerUrl}/models`, { signal: AbortSignal.timeout(3000) });
+      const lmData: any = await lmRes.json();
+      const loadedModels = lmData.data || [];
+      currentModelOnline = loadedModels.some((m: any) => m.id === model);
+    } catch (e: any) {
+      onlineCheckError = e.message || 'unknown';
+    }
+
     return {
       currentModel: model,
+      currentModelOnline,
+      onlineCheckError,
       breakInStage: stage,
       lastRouterDecision: routerDecisions,
       profile,
       strategy: agent?.getCapStrategy ? agent.getCapStrategy() : 'auto',
     };
   } catch (err: any) {
-    return { currentModel: 'unknown', error: err.message };
+    return { currentModel: 'unknown', currentModelOnline: false, error: err.message };
   }
 }
 
@@ -419,7 +435,7 @@ export function getResilienceSummary(agent?: any): any {
 }
 
 // ─── 完整仪表盘摘要 ───
-export function getFullDashboard(agent?: any): any {
+export async function getFullDashboard(agent?: any): Promise<any> {
   return {
     timestamp: new Date().toISOString(),
     agentVersion: getAgentVersion(),
@@ -427,7 +443,7 @@ export function getFullDashboard(agent?: any): any {
     projects: getProjectsSummary(),
     skills: getSkillsSummary(),
     tools: getToolsSummary(agent),
-    models: getModelSummary(agent),
+    models: await getModelSummary(agent),
     health: getHealthSummary(agent),
     memory: getMemorySummary(agent),
     audit: getAuditSummary(),

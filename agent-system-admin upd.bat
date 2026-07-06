@@ -2,16 +2,16 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-title Agent System v0.9.2 - Desktop Launcher
+title Agent System v0.6.0 - Desktop Launcher
 
 set "AGENT_DIR=D:\QClaw_Workspace\agent-system"
-set "NODE_EXE=D:\software\Common\nodejs\node.exe"
+set "NODE_EXE=D:\software\dev\NodeJS\node.exe"
 set "PORT=19701"
 set "SERVER_JS=%AGENT_DIR%\dist\server\agent-server.js"
 
 echo.
 echo ====================================
-echo   Agent System v0.9.2 - Desktop
+echo   Agent System v0.6.0 - Desktop
 echo ====================================
 echo.
 
@@ -28,7 +28,7 @@ echo [OK] Node.js found
 :: --- Check dependencies ---
 if not exist "node_modules" (
     echo [..] Installing dependencies...
-    call npm install
+    call "%NODE_EXE%" install
     if errorlevel 1 (
         echo [ERR] npm install failed
         exit /b 1
@@ -39,7 +39,7 @@ echo [OK] Dependencies ready
 :: --- Auto compile if needed ---
 if not exist "%SERVER_JS%" (
     echo [..] Compiling TypeScript...
-    call npm run build
+    call "%NODE_EXE%" "%AGENT_DIR%\node_modules\.bin\tsc"
     if errorlevel 1 (
         echo [ERR] Compilation failed
         exit /b 1
@@ -48,12 +48,12 @@ if not exist "%SERVER_JS%" (
 echo [OK] Server module ready
 
 :: --- Port check ---
-netstat -ano | findstr ":%PORT% " | findstr "LISTENING" >nul 2>&1
+netstat -ano | findstr ":%PORT% " >nul 2>&1
 if !errorlevel! equ 0 (
     echo.
     echo [OK] Server already running
-    echo      http://127.0.0.1:%PORT%/agent-ui.html
-    start "" "http://127.0.0.1:%PORT%/agent-ui.html"
+    echo      http://127.0.0.1:%PORT%/admin
+    start "" http://127.0.0.1:%PORT%/admin
     goto :end
 )
 
@@ -79,12 +79,12 @@ exit /b 1
 :ready
 echo [OK] Server started on port %PORT%
 echo.
-echo  Chat UI:     http://127.0.0.1:%PORT%/agent-ui.html
-echo  Admin Panel: http://127.0.0.1:%PORT%/admin-panel.html
-echo  Audit:       http://127.0.0.1:%PORT%/audit-dashboard.html
+echo  Management: http://127.0.0.1:%PORT%/admin
+echo  Chat:       http://127.0.0.1:%PORT%/
+echo  Audit:      http://127.0.0.1:%PORT%/audit-dashboard.html
 echo.
 
-start "" "http://127.0.0.1:%PORT%/agent-ui.html"
+start "" http://127.0.0.1:%PORT%/admin
 
 :end
 echo.

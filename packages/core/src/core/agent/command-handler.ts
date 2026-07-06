@@ -1,4 +1,4 @@
-/**
+﻿/**
  * =============================================================================
  * AgentCommandHandler — 命令处理模块（从 AgentCore 提取）
  * =============================================================================
@@ -109,6 +109,10 @@ export interface CommandHandlerDependencies {
   
   // 上下文管理
   ctxManager: ReturnType<typeof getContextManager>;
+  
+  // 提示词系统（Phase 2-3）
+  promptRegistry: any;
+  getIdentityVars: () => Record<string, string>;
   
   // 诊断和监控
   sessionDiag: ReturnType<typeof getSessionDiagnostics>;
@@ -569,8 +573,9 @@ export class AgentCommandHandler {
           this.deps.setLastMemoryInjection(injection);
           
           if (injection.systemPromptBlock) {
-            const sysMsg = this.deps.messages[0];
-            const base = 'You are an intelligent Agent assistant. Reply concisely and directly.';
+            // 从 PromptRegistry 获取 identity 模板（避免硬编码 base 文本）
+            const identityTpl = this.deps.promptRegistry.get('agent.identity', this.deps.getIdentityVars());
+            const base = identityTpl.system || 'You are an intelligent Agent assistant. Reply concisely and directly.';
             this.deps.setMessages([
               { role: 'system', content: base + '\n\n[CONTEXT FROM PAST SESSIONS]\n' + 
                 injection.systemPromptBlock },
@@ -618,8 +623,19 @@ export class AgentCommandHandler {
     
     if (args[0] === 'reset') {
       this.deps.ctxManager.reset();
+      // 清理 messages 中的压缩摘要块（role=user + 包含摘要标记）
+      const summaryMarkers = ['[此前对话摘要', '[对话历史摘要', '[部分历史已截断', '[CONTEXT FROM PAST SESSIONS]'];
+      this.deps.setMessages(
+        this.deps.messages.filter((m: ChatMessage) => {
+          if (m.role === 'system') return true;  // 保留 system
+          if (m.role === 'user' && typeof m.content === 'string') {
+            return !summaryMarkers.some(marker => m.content.includes(marker));
+          }
+          return true;
+        })
+      );
       lines.push('');
-      lines.push('[✅ 上下文状态已重置]');
+      lines.push('[✅ 上下文状态已重置，消息历史中的摘要块已清理]');
     }
     
     return lines.join('\n');
@@ -761,11 +777,12 @@ export class AgentCommandHandler {
       return lines.join('\n');
     }
     
-    if (sub === 'force') {
-      const input = '(手动强制触发) ' + args.slice(1).join(' ') || '手动诊断';
+    if (args[0] === 'force') {
+      const reason = args.slice(1).join(' ') || '手动诊断';
+      const input = '(手动强制触发) ' + reason;
       this.deps.nonsenseDetector.markConversationEnd(false, input, '(空)');
       this.deps.nonsenseDetector.forceCheck();
-      return '✅ 已强制触发胡话检测检查';
+      return '✅ 已强制触发胡话检测检查: ' + reason;
     }
     
     return '用法: /nonsense 或 /nonsense force [原因]';
@@ -871,6 +888,10 @@ export function createCommandHandlerFromAgentCore(agent: any): AgentCommandHandl
     
     // 上下文管理
     ctxManager: agent.ctxManager,
+    
+    // 提示词系统
+    promptRegistry: agent.promptRegistry,
+    getIdentityVars: agent.getIdentityVars.bind(agent),
     
     // 诊断和监控
     sessionDiag: agent.sessionDiag,

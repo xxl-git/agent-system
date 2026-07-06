@@ -237,16 +237,20 @@ type 说明:
     // 上下文压缩摘要
     this.register({
       id: 'context.summarize',
-      version: '1.0.0',
+      version: '1.1.0',
       taskType: 'summarize',
       wrapper: 'minimal',
       params: { temperature: 0, max_tokens: 1024, reasoning: 'off' },
-      system: `你是一个对话摘要助手。请将以下对话历史浓缩为简短摘要，保留关键信息：
-- 用户的主要需求和目标
-- 已完成的重要步骤和决策
-- 当前状态和未解决的问题
+      system: `请压缩以下对话历史为精炼摘要（中文，200字以内），并提取关键信息。
 
-摘要用中文，100-300字。只输出摘要文本，不要额外格式。`,
+对话历史：
+{{conversationHistory}}
+
+输出格式（不要加多余内容）：
+摘要：<精炼摘要>
+主题：<主题1>, <主题2>
+决策：<决策1> | <决策2>
+实体：<实体1>, <实体2>`,
     });
 
     // 会话摘要（记忆蒸馏）

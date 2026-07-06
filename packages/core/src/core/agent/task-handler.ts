@@ -99,7 +99,7 @@ export class TaskHandler {
             const result = await recovery.executeProtected(async () => {
                 healthMon.watchTokenStream();
                 try {
-                    const output = await orchestrator.execute(intent, rawMessage);
+                    const output = await orchestrator.execute(intent, rawMessage, taskId);
                     const proj = projectManager.getActiveProject();
                     if (proj) {
                         projectManager.recalculateProgress(proj.project);
