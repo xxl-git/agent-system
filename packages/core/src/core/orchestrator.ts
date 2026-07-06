@@ -181,15 +181,13 @@ export class Orchestrator extends EventEmitter {
 
               // 调整剩余步骤
               if (replanDecision.adjustedSteps && replanDecision.adjustedSteps.length > 0) {
-                const remainingGroups = groups.slice(gi + 1);
-                const remainingTaskIds = remainingGroups.flat();
                 // 替换剩余步骤
                 for (const newStep of replanDecision.adjustedSteps) {
-                  const existingIdx = dag.tasks.findIndex(t => remainingTaskIds.includes(t.id) && t.id === newStep.id);
+                  const existingIdx = dag.tasks.findIndex(t => t.id === newStep.id);
                   if (existingIdx >= 0) {
                     dag.tasks[existingIdx] = { ...newStep, status: 'pending' };
                   } else {
-                    // 新增步骤
+                    // 新增步骤：追加到最后一个待执行组
                     dag.tasks.push({ ...newStep, status: 'pending' });
                     groups[groups.length - 1].push(newStep.id);
                   }

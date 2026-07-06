@@ -1,7 +1,19 @@
 // 智能适配器封装 — LLM 作为纯发动机，系统掌控方向盘
 // 职责：超时控制 · 空响应拦截 · tool_call 剥离 · 退避重试 · 循环检测 · 重复检测 · 降级 fallback
+import * as fs from 'fs';
+import * as path from 'path';
 import type { ChatMessage, ChatCompletionResponse, LMStudioAdapter } from '../models/adapters/lmstudio';
 import logger from '../logger';
+
+/** 动态读取项目版本（避免硬编码版本号过时） */
+function getVersion(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
+    return pkg.version || '0.9.2';
+  } catch {
+    return '0.9.2';
+  }
+}
 
 export interface SmartAdapterConfig {
   /** 单次调用超时 (ms) */
@@ -267,7 +279,7 @@ export class SmartAdapter {
     }
 
     if (input.includes('你好') || input.includes('hi') || input.includes('hello')) {
-      return '你好！我是 Agent System v0.5.0。当前 LLM 服务暂不可用，回答基于本地规则生成。';
+      return `你好！我是 Agent System v${getVersion()}。当前 LLM 服务暂不可用，回答基于本地规则生成。`;
     }
 
     if (input.length < 10) {

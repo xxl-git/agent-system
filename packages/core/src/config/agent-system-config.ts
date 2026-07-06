@@ -9,6 +9,16 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import logger from '../logger';
 
+/** 动态读取项目版本（避免硬编码版本号过时） */
+function getVersion(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
+    return pkg.version || '0.9.2';
+  } catch {
+    return '0.9.2';
+  }
+}
+
 // ── 完整配置接口 ──
 
 export interface AgentSystemConfig {
@@ -113,7 +123,7 @@ export interface AgentSystemConfig {
 // ── 默认配置 ──
 
 export const DEFAULT_CONFIG: AgentSystemConfig = {
-  system: { name: 'agent-system', version: '0.6.4' },
+  system: { name: 'agent-system', version: getVersion() },
   models: {
     defaultProvider: 'lmstudio',
     providers: {
