@@ -43,8 +43,8 @@ async function testEstimateTokens() {
   
   const tests = [
     { input: '你好', expectedMin: 2, expectedMax: 5, desc: '短文本' },
-    { input: 'Hello world', expectedMin: 10, expectedMax: 20, desc: '英文短文本' },
-    { input: 'a'.repeat(100), expectedMin: 100, expectedMax: 150, desc: '100字符' },
+    { input: 'Hello world', expectedMin: 1, expectedMax: 5, desc: '英文短文本' },
+    { input: 'a'.repeat(100), expectedMin: 20, expectedMax: 30, desc: '100字符(英文4字符≈1token)' },
     { input: '测试文本。'.repeat(50), expectedMin: 300, expectedMax: 400, desc: '中文长文本' },
   ];
   

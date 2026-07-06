@@ -17,9 +17,15 @@ function createMessages(count: number, baseLength: number): ChatMessage[] {
   return msgs;
 }
 
-/** 模拟 summarizer（返回一个固定摘要） */
+/** 模拟 summarizer（返回一个较长摘要，约 100 tokens）
+ * 目的：
+ * - 测试2 (summaryTokenBudget=200) → summaryTokens(~125) < 200 → 走正常分支 [此前对话摘要]
+ * - 测试3 (summaryTokenBudget=50)  → summaryTokens(~125) > 50  → 触发摘要超预算分支 [对话历史摘要]
+ */
 async function mockSummarizer(prompt: string): Promise<string> {
-  return `[自动摘要] 这是对 ${prompt.length} 字符的对话内容的摘要。`;
+  const header = `[自动摘要] 这是对 ${prompt.length} 字符的对话内容的详细摘要。`;
+  const filler = 'x'.repeat(400); // ~100 tokens 英文填充
+  return header + filler;
 }
 
 // ─── 测试用例 ───────────────────────────────────────────────────────────────
