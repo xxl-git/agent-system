@@ -842,33 +842,78 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // API: POST /api/models/scan — 重新扫描 LM Studio 加载的模型
+  // API: POST /api/models/scan — 重新扫描 LM Studio 可用模型（含未加载）
   if (url === '/api/models/scan' && isPost()) {
     try {
-      const cfg = getConfig();
-      const providerUrl = cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1';
-      const lmRes = await fetch(`${providerUrl}/models`, { signal: AbortSignal.timeout(5000) });
-      const lmData: any = await lmRes.json();
-      const models = (lmData.data || []).map((m: any) => ({
-        id: m.id,
-        context_length: m.context_length || 0,
-        arch: m.arch || 'unknown',
-        publisher: m.publisher || 'unknown',
-        type: m.type || 'llm',
-      }));
-      let currentModel = cfg.models?.providers?.lmstudio?.model || 'unknown';
+      let models: any[] = [];
+      let currentModel = 'unknown';
+      let connected = false;
       if (agent && agentReady) {
-        try { currentModel = agent.adapter.model; } catch { /* ignore */ }
+        // 优先使用 agent 实例的 listAllModels()（合并两个端点）
+        try {
+          models = await agent.adapter.listAllModels();
+          connected = models.length > 0;
+          currentModel = agent.adapter.model;
+        } catch {
+          // listAllModels 失败，走下方回退
+        }
+      }
+      if (models.length === 0) {
+        // 回退：直接调用 LM Studio REST API（含未加载模型）+ OpenAI 端点标记加载状态
+        const cfg = getConfig();
+        const providerUrl = cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1';
+        try {
+          const lmRes = await fetch(`${providerUrl}/models`, { signal: AbortSignal.timeout(5000) });
+          const lmData: any = await lmRes.json();
+          const loadedIds = new Set((lmData.data || []).map((m: any) => m.id));
+          connected = !!lmData.data?.length;
+          const restRes = await fetch(`${providerUrl.replace('/v1', '/api/v1')}/models`, { signal: AbortSignal.timeout(8000) });
+          const restData: any = await restRes.json();
+          const restModels = restData.models || [];
+          models = restModels.map((m: any) => ({
+            id: m.key,
+            object: 'model',
+            type: m.type || 'llm',
+            publisher: m.publisher || 'unknown',
+            arch: m.architecture || 'unknown',
+            context_length: m.max_context_length || 0,
+            display_name: m.display_name,
+            quantization: m.quantization?.name,
+            params_string: m.params_string || undefined,
+            size_bytes: m.size_bytes,
+            loaded: (Array.isArray(m.loaded_instances) && m.loaded_instances.length > 0) || loadedIds.has(m.key),
+            capabilities: {
+              vision: m.capabilities?.vision || false,
+              trained_for_tool_use: m.capabilities?.trained_for_tool_use || false,
+              reasoning: !!m.capabilities?.reasoning,
+            },
+          }));
+          // 确保已加载但不在 REST 列表的模型也包含
+          for (const lm of (lmData.data || [])) {
+            if (!models.some((m: any) => m.id === lm.id)) {
+              models.push({ id: lm.id, object: 'model', type: 'llm', publisher: lm.owned_by || 'unknown', arch: 'unknown', context_length: 0, loaded: true });
+            }
+          }
+        } catch {
+          // REST 不可用，models 为空
+        }
+        currentModel = cfg.models?.providers?.lmstudio?.model || 'unknown';
+        if (agent && agentReady) {
+          try { currentModel = agent.adapter.model; } catch { /* ignore */ }
+        }
       }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       const currentModelOnline = models.some((m: any) => m.id === currentModel);
+      const loadedCount = models.filter((m: any) => m.loaded).length;
       res.end(JSON.stringify({
         ok: true,
         models,
         current: currentModel,
         currentModelOnline,
         count: models.length,
-        connected: models.length > 0,
+        loadedCount,
+        totalCount: models.length,
+        connected,
       }));
     } catch (err: any) {
       // 区分错误类型：连接拒绝（LM Studio 未启动）vs 其他错误
