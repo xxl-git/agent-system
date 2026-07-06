@@ -1453,7 +1453,7 @@ setInterval(() => {
     const s = Math.floor(d.uptime || 0);
     el.textContent = s < 60 ? s + 's' : Math.floor(s/60) + 'm ' + (s%60) + 's';
   }).catch(() => {});
-}, 2000);
+}, 30000);
 
 // ═══ Context Usage Polling ═══
 function updateContextDisplay(data) {
@@ -1485,7 +1485,7 @@ setInterval(() => {
   fetch('/api/dashboard').then(r => r.json()).then(data => {
     updateContextDisplay(data);
   }).catch(() => {});
-}, 5000);
+}, 30000);
 
 // ═══ Models ═══
 let providersList = [];
