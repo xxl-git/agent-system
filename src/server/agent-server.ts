@@ -1045,7 +1045,8 @@ const server = http.createServer(async (req, res) => {
   if (url === '/api/config' && isPost()) {
     try {
       const body = await readBody(req);
-      const { model, callTimeoutMs, maxRetries, maxTokens, chatTimeoutMs } = JSON.parse(body);
+      const updates = JSON.parse(body);
+      const { model, callTimeoutMs, maxRetries, maxTokens, chatTimeoutMs } = updates;
 
       // 参数校验：拒绝负数和 NaN
       const validatedTimeout = (v: unknown, name: string, min: number, max: number): number | null => {
@@ -1060,14 +1061,60 @@ const server = http.createServer(async (req, res) => {
       const configPath = path.resolve(__dirname, '..', '..', 'config', 'default.json');
       const raw = fs.readFileSync(configPath, 'utf-8');
       const currentConfig = JSON.parse(raw);
+      const changes: Record<string, unknown> = {};
 
-      if (model) currentConfig.models.providers.lmstudio.model = model;
+      if (model) { currentConfig.models.providers.lmstudio.model = model; changes.model = model; }
       const vTimeout = validatedTimeout(callTimeoutMs, 'callTimeoutMs', 1000, 3600000);
-      if (vTimeout !== null) currentConfig.agent.callTimeoutMs = vTimeout;
+      if (vTimeout !== null) { currentConfig.agent.callTimeoutMs = vTimeout; changes.callTimeoutMs = vTimeout; }
       const vRetries = validatedTimeout(maxRetries, 'maxRetries', 0, 100);
-      if (vRetries !== null) currentConfig.agent.maxRetries = vRetries;
+      if (vRetries !== null) { currentConfig.agent.maxRetries = vRetries; changes.maxRetries = vRetries; }
       const vTokens = validatedTimeout(maxTokens, 'maxTokens', 1, 100000);
-      if (vTokens !== null) currentConfig.models.providers.lmstudio.maxTokens = vTokens;
+      if (vTokens !== null) { currentConfig.models.providers.lmstudio.maxTokens = vTokens; changes.maxTokens = vTokens; }
+
+      // === 新增：支持 agent.debugLogging ===
+      if (updates.agent?.debugLogging !== undefined) {
+        const dbg = !!updates.agent.debugLogging;
+        if (!currentConfig.agent) currentConfig.agent = {};
+        currentConfig.agent.debugLogging = dbg;
+        changes.debugLogging = dbg;
+        // 即时生效：调整 logger 级别
+        try {
+          logger.setLevel(dbg ? 'debug' : 'info');
+          logger.info('[AgentServer] 详细日志已' + (dbg ? '开启' : '关闭'));
+        } catch (e) {
+          logger.warn('[AgentServer] 调整 logger 级别失败', e);
+        }
+      }
+
+      // === 新增：支持 logging.level / logging.maxFileSizeMB / logging.maxRotatedFiles ===
+      if (updates.logging) {
+        if (!currentConfig.logging) currentConfig.logging = {};
+        const validLevels = ['debug', 'info', 'warn', 'error'];
+        if (updates.logging.level && validLevels.includes(updates.logging.level)) {
+          currentConfig.logging.level = updates.logging.level;
+          changes.logLevel = updates.logging.level;
+          try { logger.setLevel(updates.logging.level as any); } catch (e) { logger.warn('[AgentServer] setLevel 失败', e); }
+        }
+        if (updates.logging.maxFileSizeMB !== undefined) {
+          const sz = Number(updates.logging.maxFileSizeMB);
+          if (Number.isFinite(sz) && sz > 0) { currentConfig.logging.maxFileSizeMB = sz; changes.maxFileSizeMB = sz; }
+        }
+        if (updates.logging.maxRotatedFiles !== undefined) {
+          const nf = Number(updates.logging.maxRotatedFiles);
+          if (Number.isFinite(nf) && nf > 0) { currentConfig.logging.maxRotatedFiles = nf; changes.maxRotatedFiles = nf; }
+        }
+      }
+
+      // === 新增：支持 models.providers.lmstudio.baseUrl 等 ===
+      if (updates.models?.providers?.lmstudio) {
+        const ls = updates.models.providers.lmstudio;
+        if (!currentConfig.models) currentConfig.models = { providers: { lmstudio: {} } };
+        if (!currentConfig.models.providers) currentConfig.models.providers = { lmstudio: {} };
+        if (!currentConfig.models.providers.lmstudio) currentConfig.models.providers.lmstudio = {};
+        if (ls.model) { currentConfig.models.providers.lmstudio.model = ls.model; changes.model = ls.model; }
+        if (ls.baseUrl) { currentConfig.models.providers.lmstudio.baseUrl = ls.baseUrl; changes.baseUrl = ls.baseUrl; }
+      }
+
       if (chatTimeoutMs !== undefined) {
         const vChatTimeout = validatedTimeout(chatTimeoutMs, 'chatTimeoutMs', 5000, 3600000);
         if (vChatTimeout !== null) {
@@ -1094,7 +1141,7 @@ const server = http.createServer(async (req, res) => {
       initConfig();
       
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true, message: '配置已更新，重启后生效', changes: { model, callTimeoutMs, maxRetries, maxTokens, chatTimeoutMs } }));
+      res.end(JSON.stringify({ ok: true, message: '配置已更新，重启后生效', changes }));
     } catch (err: any) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
@@ -1115,6 +1162,12 @@ const server = http.createServer(async (req, res) => {
         maxTokens: cfg.models?.providers?.lmstudio?.maxTokens || 2048,
         heartbeatIntervalMs: cfg.agent?.heartbeatIntervalMs || 300000,
         chatTimeoutMs: cfg.server?.chatTimeoutMs || 120000,
+        agent: { debugLogging: cfg.agent?.debugLogging ?? false },
+        logging: {
+          level: cfg.logging?.level || 'info',
+          maxFileSizeMB: cfg.logging?.maxFileSizeMB || 10,
+          maxRotatedFiles: cfg.logging?.maxRotatedFiles || 5,
+        },
       }));
     } catch (err: any) {
       res.writeHead(500, { 'Content-Type': 'application/json' });

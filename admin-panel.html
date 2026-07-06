@@ -1051,8 +1051,14 @@ async function toggleDebugLog() {
     const data = await res.json();
     if (data.ok) {
       updateDebugBadge();
-      cb.closest('label').querySelector('span:last-child').textContent = on ? '已开启' : '已关闭';
+      // 修复：span 在外层 label 里，不是 toggle-track label 里
+      const outerLabel = cb.closest('label.toggle-track')?.parentElement;
+      const span = outerLabel?.querySelector('span:last-child');
+      if (span) span.textContent = on ? '已开启' : '已关闭';
       showToast(on ? '🔍 详细日志已开启' : '🔍 详细日志已关闭');
+    } else {
+      showToast('✗ 保存失败：' + (data.message || '未知错误'));
+      cb.checked = !on;
     }
   } catch (err) {
     showToast('✗ 切换失败: ' + err.message);
