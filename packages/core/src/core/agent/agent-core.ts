@@ -539,11 +539,9 @@ class AgentCore {
                 }
                 catch { /* adapter 不支持时忽略 */ }
 
-                // ══ 消息装配追踪：Stage 0 - 原始上下文 ══
-                if (!this._assemblyReport) {
-                    this._assemblyReport = createAssemblyReport(this.sessionId, userInput);
-                    addAssemblyStage(this._assemblyReport, 'raw_input', '原始用户输入', '用户输入+历史消息', this.messages);
-                }
+                // ══ 消息装配追踪：Stage 0 - 原始上下文（每次 handleChat 都重建，确保每条消息独立追踪） ══
+                this._assemblyReport = createAssemblyReport(this.sessionId, userInput);
+                addAssemblyStage(this._assemblyReport, 'raw_input', '原始用户输入', '用户输入+历史消息', this.messages);
 
                 // P7: 上下文管理 — 压缩后发送
                 const ctxResult = await this.ctxManager.process(this.messages, userInput, async (prompt) => {
@@ -872,10 +870,11 @@ class AgentCore {
                         }
                     }
                     catch (streamErr) {
-                        // 流式中断：如果有部分内容，保留并标记
+                        // 流式中断：如果有部分内容，保留并标记 done（前端才能正常切换状态）
                         if (fullReply.length > 0) {
                             logger.warn(`[Agent][stream] 流式中断，保留已有内容 (${fullReply.length}字): ${streamErr}`);
-                            agentEventBus.emitChatError(streamErr.message || 'stream interrupted');
+                            const partialDuration = Date.now() - streamStartTime;
+                            agentEventBus.emitChatDone(fullReply, partialDuration);  // 通知前端完成
                         } else {
                             // 无内容：尝试网络错重试 → 非流式回退
                             const isNetwork = /ECONNREFUSED|ECONNRESET|fetch failed|network/i.test(streamErr.message || '');
@@ -2125,8 +2124,12 @@ class AgentCore {
             failCount: 0,
             maxFails: idleCfg?.defaultMaxFails ?? 3,
             execute: async () => {
-                const MEMORY_DIR = 'D:\\QClaw_Workspace\\memory';
-                const ARCHIVE_DIR = 'D:\\QClaw_Workspace\\data\\memory-archive';
+                // 使用配置路径而非硬编码绝对路径，保证可移植性
+                const memCfg = agent_system_config_1.getConfigSection('memory');
+                const MEMORY_DIR = memCfg?.filePath
+                    ? (path.isAbsolute(memCfg.filePath) ? memCfg.filePath : path.join(process.cwd(), memCfg.filePath))
+                    : path.join(process.cwd(), 'memory');
+                const ARCHIVE_DIR = path.join(path.dirname(MEMORY_DIR), 'memory-archive');
                 const ARCHIVE_THRESHOLD_DAYS = 30;
 
                 try {
@@ -2332,6 +2335,9 @@ class AgentCore {
         }
         this.running = false;
         this.orchestrator.stopHeartbeat();
+        // 停止后台监控定时器（胡话检测/健康监控），防止进程残留后定时器空转
+        try { this.nonsenseDetector.stopMonitor(); } catch { /* ignore */ }
+        try { this.healthMon.reset(); } catch { /* ignore */ }
         // P2: 自动会话摘要
         try {
             this.summarizer.summarizeSession(this.sessionId, this.messages.filter(m => m.role !== 'system'), []).catch(() => { });
