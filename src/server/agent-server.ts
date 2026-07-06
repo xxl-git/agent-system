@@ -546,10 +546,9 @@ const server = http.createServer(async (req, res) => {
   // API: GET /api/trace/list — 最近 trace 列表
   if (url === '/api/trace/list' && isGet()) {
     try {
-      const tracerModule = require('@agent-system/resilience');
-      const traces = tracerModule.getRecentTraces(20);
+      // getRecentTraces not available; return empty list for now
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ traces }));
+      res.end(JSON.stringify({ traces: [], note: 'getRecentTraces not implemented in @agent-system/resilience' }));
     } catch (err: any) {
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: err.message }));
