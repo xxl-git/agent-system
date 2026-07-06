@@ -1289,7 +1289,7 @@ function _applyFreshDashboard(data) {
 }
 
 initialLoad();
-setInterval(loadDashboard, 5000);
+setInterval(loadDashboard, 30000);
 
 // SSE
 const sse = new EventSource(`${API}/api/events`);
