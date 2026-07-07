@@ -128,6 +128,13 @@ export interface CommandHandlerDependencies {
   
   // 状态构建
   buildStatus: () => string;
+  
+  // 长任务恢复/检查点/暂停（委托给 agent-core 的现有方法）
+  handleResume: (args: string[]) => Promise<string>;
+  handleCkpt: (args: string[]) => string;
+  handlePause: (args: string[]) => string;
+  // 停止 agent（/exit 命令用）
+  stop: () => void;
 }
 
 export class AgentCommandHandler {
@@ -148,8 +155,8 @@ export class AgentCommandHandler {
     switch (action) {
       case 'exit':
       case 'quit':
-        // 注意：退出逻辑需要在 AgentCore 中处理，因为需要调用 this.stop()
-        return 'EXIT_REQUESTED';
+        this.deps.stop();
+        return 'Goodbye!';
         
       case 'history':
         return this.handleHistoryCommand();
@@ -202,7 +209,17 @@ export class AgentCommandHandler {
       case 'exp':
       case 'experience':
         return await this.handleExperienceCommand(args.slice(1));
-        
+      
+      case 'resume':
+        return await this.deps.handleResume(args.slice(1));
+      
+      case 'ckpt':
+      case 'checkpoint':
+        return this.deps.handleCkpt(args.slice(1));
+      
+      case 'pause':
+        return this.deps.handlePause(args.slice(1));
+      
       case 'help':
         return this.handleHelpCommand();
         
@@ -223,26 +240,17 @@ export class AgentCommandHandler {
   }
   
   private handleHelpCommand(): string {
-    return `Available commands:
-  /exit, /quit - Exit the agent
-  /history - Show conversation history
-  /status - Show agent status
-  /project - Project management (list|create|switch|status)
-  /models - Model management (list|detail)
-  /router - Show router status
-  /skills - Skill management (list|gaps|apply|audit|process)
-  /agents - Multi-agent management (status|new)
-  /resilience - Show resilience status
-  /audit - Audit log (summary|recent|errors|search)
-  /summarize - Summarize conversation (now|list|recent|patrol)
-  /memory - Memory management (status|decisions|entities|reload)
-  /context - Context management (show|reset)
-  /idle - Idle task management (status|pending|log|run)
-  /diag - Diagnostics (status|list|reports|force)
-  /nonsense - Nonsense detection status
-  /config - Configuration (show|reload|path)
-  /exp, /experience - Experience management
-  /help - Show this help message`;
+    return `Commands:
+  /exit /history /status /project
+  /models [list|scan|switch|detail] — 模型探测与切换
+  /router /skills /agents
+  /resilience /audit /summarize
+  /memory /context /idle /diag /nonsense /config
+  /exp [add|list|view|search|edit|delete|stats|help]
+  /resume [index|taskId] — 恢复长任务
+  /ckpt [list|show|clear] — 检查点管理
+  /pause — 暂停当前任务
+  /help`;
   }
   
   // ===== Project 命令 =====
@@ -907,6 +915,12 @@ export function createCommandHandlerFromAgentCore(agent: any): AgentCommandHandl
     
     // 状态构建
     buildStatus: agent.buildStatus.bind(agent),
+    
+    // 长任务恢复/检查点/暂停
+    handleResume: agent.handleResumeCommand.bind(agent),
+    handleCkpt: agent.handleCkptCommand.bind(agent),
+    handlePause: agent.handlePauseCommand.bind(agent),
+    stop: agent.stop.bind(agent),
   };
   
   return new AgentCommandHandler(deps);

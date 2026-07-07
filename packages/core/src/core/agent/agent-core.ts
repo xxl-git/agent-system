@@ -37,6 +37,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import logger from '../../logger';
 import { getTracer, finishTrace, createAssemblyReport, addAssemblyStage, formatAssemblyReport, getAssemblyReport } from '@agent-system/resilience';
+import { ChatHandler, createChatHandlerFromAgentCore } from './chat-handler';
+import { AgentCommandHandler, createCommandHandlerFromAgentCore } from './command-handler';
+import { TaskHandler, createTaskHandlerFromAgentCore } from './task-handler';
 
 class AgentCore {
     adapter;
@@ -91,6 +94,10 @@ class AgentCore {
     _tracer;
     // 消息装配流水线记录
     _assemblyReport;
+    // Phase 1-3 重构：Handler 模块实例（真正集成）
+    chatHandler!: ChatHandler;
+    commandHandler!: AgentCommandHandler;
+    taskHandler!: TaskHandler;
     messages = [];
     running = false;
     sessionId;
@@ -323,6 +330,13 @@ class AgentCore {
         this.registerProactiveTasks();
         // Phase 5: 启动韧性心跳（必须在 nonsenseDetector 和诊断任务注册之后）
         this.orchestrator.startHeartbeat();
+        
+        // Phase 1-3 重构：实例化 Handler 模块（真正集成）
+        this.chatHandler = createChatHandlerFromAgentCore(this);
+        this.commandHandler = createCommandHandlerFromAgentCore(this);
+        this.taskHandler = createTaskHandlerFromAgentCore(this);
+        logger.info('[Agent] Handler 模块已集成: ChatHandler + CommandHandler + TaskHandler');
+        
         const totalTime = Date.now() - initStart;
         logger.info(`[Agent] ====== 初始化完成 (${totalTime}ms) ======`);
         logger.info(`Agent core (Phase 5: router+skills+multi-agent+resilience+heartbeat)`);
@@ -499,6 +513,9 @@ class AgentCore {
         return reply;
     }
     async handleChat(userInput) {
+        // Phase 2 重构：委托给 ChatHandler（已集成）
+        if (this.chatHandler) return this.chatHandler.handle(userInput);
+        // 以下为原始内联实现（fallback，handler 未初始化时使用）
         const t0 = Date.now();
         const chatSpanId = this._tracer?.start('handleChat', 'Agent', { input: userInput.slice(0, 80) });
         logger.info(`[Agent] ┌─ handleChat() 输入(${userInput.length}字)`);
@@ -776,6 +793,9 @@ class AgentCore {
      * 逐 chunk 通过 agentEventBus.emitChatChunk() 广播
      */
     async handleChatStream(userInput) {
+        // Phase 2 重构：委托给 ChatHandler（已集成）
+        if (this.chatHandler) return this.chatHandler.handleStream(userInput);
+        // 以下为原始内联实现（fallback）
         const t0 = Date.now();
         logger.info(`[Agent] ┌─ handleChatStream() 输入(${userInput.length}字)`);
         this.nonsenseDetector.markConversationStart(userInput);
@@ -928,6 +948,9 @@ class AgentCore {
         return chatOutput;
     }
     async handleTask(intent, rawMessage) {
+        // Phase 3 重构：委托给 TaskHandler（已集成）
+        if (this.taskHandler) return this.taskHandler.handle(intent, rawMessage);
+        // 以下为原始内联实现（fallback）
         const t0 = Date.now();
         const taskSpanId = this._tracer?.start('handleTask', 'Agent', { intent_type: intent.type, confidence: intent.confidence, summary: intent.summary?.slice(0, 60) });
         logger.info(`[Agent] ┌─ handleTask() intent.confidence=${intent.confidence} summary=${intent.summary}`);
@@ -1039,6 +1062,9 @@ class AgentCore {
         return 'multi-agent done (' + result.mode + ', ' + result.totalDurationMs + 'ms)\n' + result.merged.summary;
     }
     async handleCommand(input) {
+        // Phase 1 重构：委托给 CommandHandler（已集成）
+        if (this.commandHandler) return this.commandHandler.handle(input);
+        // 以下为原始内联实现（fallback）
         const t0 = Date.now();
         const cmd = input.slice(1).toLowerCase().trim();
         const args = cmd.split(/\s+/);
