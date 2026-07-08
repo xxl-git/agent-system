@@ -30,7 +30,7 @@ export interface AgentSystemConfig {
       apiKey: string;
       model: string;
       timeoutMs: number;
-      maxTokens?: number;
+      maxOutputTokens?: number;
       reasoning?: 'off' | 'low' | 'medium' | 'high' | 'on';
     }>;
     customProviders?: Array<{
@@ -131,8 +131,8 @@ export const DEFAULT_CONFIG: AgentSystemConfig = {
         baseUrl: 'http://127.0.0.1:1234/v1',
         apiKey: 'not-needed',
         model: 'qwen/qwen3.5-9b',
-        timeoutMs: 120000,
-        maxTokens: 512,
+        timeoutMs: 300000,
+        maxOutputTokens: 4096,
         reasoning: 'off',
       },
     },

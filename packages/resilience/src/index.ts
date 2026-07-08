@@ -18,7 +18,7 @@ export { RecoveryOrchestrator, getRecoveryOrchestrator } from './orchestrator';
 export type { ProtectedContext, ProtectedResult, RecoveryConfig } from './orchestrator';
 export { SessionDiagnostics, getSessionDiagnostics } from './session-diagnostics';
 export type { DiagnosticSnapshot } from './session-diagnostics';
-export { Tracer, getTracer, finishTrace, getTraceReport } from './tracer';
+export { Tracer, getTracer, finishTrace, getTraceReport, getRecentTraces } from './tracer';
 export type { TraceSpan, TraceReport } from './tracer';
 export { createAssemblyReport, addAssemblyStage, formatAssemblyReport, getAssemblyReport } from './assembly-inspector';
 export type { AssemblyReport, AssemblyStage } from './assembly-inspector';

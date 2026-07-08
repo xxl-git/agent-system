@@ -547,9 +547,10 @@ const server = http.createServer(async (req, res) => {
   // API: GET /api/trace/list — 最近 trace 列表
   if (url === '/api/trace/list' && isGet()) {
     try {
-      // getRecentTraces not available; return empty list for now
+      const tracerModule = require('@agent-system/resilience');
+      const traces = tracerModule.getRecentTraces ? tracerModule.getRecentTraces(20) : [];
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ traces: [], note: 'getRecentTraces not implemented in @agent-system/resilience' }));
+      res.end(JSON.stringify({ traces, count: traces.length }));
     } catch (err: any) {
       res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: err.message }));
@@ -1095,10 +1096,10 @@ const server = http.createServer(async (req, res) => {
         setNested(yamlConfig, ['agent', 'maxRetries'], vRetries);
         changes.maxRetries = vRetries;
       }
-      const vTokens = validatedTimeout(maxTokens, 'maxTokens', 1, 100000);
+      const vTokens = validatedTimeout(maxTokens, 'maxOutputTokens', 1, 100000);
       if (vTokens !== null) {
-        setNested(yamlConfig, ['models', 'providers', 'lmstudio', 'maxTokens'], vTokens);
-        changes.maxTokens = vTokens;
+        setNested(yamlConfig, ['models', 'providers', 'lmstudio', 'maxOutputTokens'], vTokens);
+        changes.maxOutputTokens = vTokens;
       }
 
       // === 新增：支持 agent.debugLogging ===
@@ -1190,7 +1191,7 @@ const server = http.createServer(async (req, res) => {
         baseUrl: cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1',
         callTimeoutMs: cfg.agent?.callTimeoutMs || 60000,
         maxRetries: cfg.agent?.maxRetries ?? 1,
-        maxTokens: cfg.models?.providers?.lmstudio?.maxTokens || 2048,
+        maxOutputTokens: cfg.models?.providers?.lmstudio?.maxOutputTokens || 2048,
         heartbeatIntervalMs: cfg.agent?.heartbeatIntervalMs || 300000,
         chatTimeoutMs: cfg.server?.chatTimeoutMs || 120000,
         agent: { debugLogging: cfg.agent?.debugLogging ?? false },

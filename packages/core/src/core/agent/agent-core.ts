@@ -384,6 +384,8 @@ class AgentCore {
         }
         logger.info(`[Agent] → 开始能力探测 (profile=${profile ? 'exist:' + profile.stage : 'none'})`);
         this.adapter.setProbeMode(true); // 探针模式：禁用重复检测
+        // 探测前先同步 BreakIn 模型名为实际加载模型
+        this.breakIn.setModelName(modelName);
         try {
             const t0 = Date.now();
             const capability = await this.breakIn.onboard(this.adapter.asChatFn());
@@ -392,8 +394,6 @@ class AgentCore {
             const warnings = capability.warnings.length ? '\nWARN: ' + capability.warnings.join('; ') : '';
             const msg = `PROBED: ${modelName} (${elapsed}ms)\n  Score: ${(capability.overallScore * 100).toFixed(0)}%` + warnings;
             logger.info(`[Agent] → 探测完成: ${(capability.overallScore * 100).toFixed(0)}% (${elapsed}ms)`);
-            // 同步 BreakInMachine 中实际模型名（可能 probe 返回与 config 不一致）
-            this.breakIn.setModelName(modelName);
             return msg;
         }
         catch (err) {

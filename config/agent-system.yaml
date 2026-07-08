@@ -9,7 +9,7 @@ models:
       apiKey: not-needed
       model: qwen/qwen3.5-9b
       timeoutMs: 300000
-      maxTokens: 512
+      maxOutputTokens: 4096
   customProviders:
     - id: deepseek:deepseek-chat
       name: deepseek-chat
@@ -88,5 +88,5 @@ profiles:
   dataDir: data/profiles
 server:
   port: 19701
-  chattimeoutMs: 300000
+  chatTimeoutMs: 300000
   maxUploadSizeMB: 20

@@ -279,8 +279,7 @@ export function getContextSummary(): any {
     let effectiveWindow: number | null = null;
     let sessionReset = false;
     try {
-      const cfg = getConfig();
-      const rawContext = cfg.models?.providers?.lmstudio?.maxTokens || 4096;
+      const rawContext = 4096;
       effectiveWindow = Math.floor(rawContext * 0.80 * 0.85);
     } catch {}
     return {

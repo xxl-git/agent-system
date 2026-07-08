@@ -100,7 +100,7 @@ export class LMStudioAdapter {
     this.v1BaseUrl = this.baseUrl.replace(/\/v1\/?$/, '/api/v1');
     this.model = provider.model;
     this.timeoutMs = Math.min(provider.timeoutMs || 60000, 60000);
-    this.maxTokens = provider.maxTokens || 2048;
+    this.maxTokens = provider.maxOutputTokens || 2048;
 
     // 自动读取 reasoning 配置（如有）
     if (provider.reasoning) {
@@ -158,7 +158,7 @@ export class LMStudioAdapter {
    * 返回模型实际上下文长度的 80%，减去 max_tokens 输出预算，再减去安全边际
    */
   getEffectiveContextWindow(): number {
-    const rawContext = this.contextLength || getConfig().models.providers.lmstudio.maxTokens || 4096;
+    const rawContext = this.contextLength || 4096;
     const forInput = Math.floor(rawContext * 0.80);
     const effectiveMax = Math.floor(forInput * 0.85);
     logger.debug(`[LMStudio] 有效上下文窗口: ${rawContext}×0.80×0.85 = ${effectiveMax}`);
