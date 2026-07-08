@@ -118,7 +118,7 @@ function quickParse(userMessage: string): ParsedIntent {
       type: 'chat',
       summary: '简短消息',
       entities: [],
-      confidence: 0.7,
+      confidence: 0.95, // 提高置信度避免不必要的 LLM 意图解析（节省 30-60s）
       needsClarification: false,
       missingInfo: [],
     };

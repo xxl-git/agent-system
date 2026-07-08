@@ -29,6 +29,7 @@ export interface ChatHandlerDeps {
     formatRecoveryResult: (result: any) => string;   // 格式化恢复结果
     getIdentityVars: () => Record<string, string>;   // 获取身份变量
     _cachedMemoryBlock: string | null;               // 缓存的记忆块
+    getCachedMemoryBlock: () => string | null;        // 获取最新记忆块（避免值快照过期）
     _assemblyReport: any | null;                     // 装配追踪报告（外部持有，handler 会重置）
     sessionId: string;                               // 会话 ID
     setMessages: (msgs: any[]) => void;              // 更新消息历史
@@ -139,22 +140,22 @@ export class ChatHandler {
                     }
 
                     // ══ 装配追踪 Stage 3 - 注入前 ══
-                    if (this.deps._cachedMemoryBlock || experienceBlock) {
+                    if (this.deps.getCachedMemoryBlock() || experienceBlock) {
                         const preInjectMsgs = [...ctxResult.messages];
-                        if (this.deps._cachedMemoryBlock) {
-                            preInjectMsgs.push({ role: 'user', content: `[MEMORY BLOCK即将注入: ${this.deps._cachedMemoryBlock.length}字]` });
+                        if (this.deps.getCachedMemoryBlock()) {
+                            preInjectMsgs.push({ role: 'user', content: `[MEMORY BLOCK即将注入: ${this.deps.getCachedMemoryBlock()?.length}字]` });
                         }
                         if (experienceBlock) {
                             preInjectMsgs.push({ role: 'user', content: `[EXPERIENCE BLOCK即将注入: ${experienceBlock.length}字]` });
                         }
                         addAssemblyStage(assemblyReport, 'injection_prepare', '记忆/经验准备',
-                            `memory=${this.deps._cachedMemoryBlock?.length ?? 0}字, experience=${experienceBlock?.length ?? 0}字`, preInjectMsgs);
+                            `memory=${this.deps.getCachedMemoryBlock()?.length ?? 0}字, experience=${experienceBlock?.length ?? 0}字`, preInjectMsgs);
                     }
 
                     const assembled = promptAssembler.assemble({
                         identityTemplateId: 'agent.identity',
                         identityVars: this.deps.getIdentityVars(),
-                        memoryBlock: this.deps._cachedMemoryBlock || undefined,
+                        memoryBlock: this.deps.getCachedMemoryBlock() || undefined,
                         experienceBlock: experienceBlock,
                         context: ctxResult.messages,
                         userInput: undefined,
@@ -299,7 +300,7 @@ export class ChatHandler {
                     const assembled = promptAssembler.assemble({
                         identityTemplateId: 'agent.identity',
                         identityVars: this.deps.getIdentityVars(),
-                        memoryBlock: this.deps._cachedMemoryBlock || undefined,
+                        memoryBlock: this.deps.getCachedMemoryBlock() || undefined,
                         experienceBlock: experienceBlock,
                         context: ctxResult.messages,
                         userInput: undefined,
@@ -324,6 +325,7 @@ export class ChatHandler {
                             logger.warn(`[Agent][stream] 流式中断，保留已有内容 (${fullReply.length}字): ${streamErr}`);
                             const partialDuration = Date.now() - streamStartTime;
                             agentEventBus.emitChatDone(fullReply, partialDuration);
+                            return fullReply;
                         } else {
                             // 无内容：网络错重试 → 非流式回退
                             const isNetwork = /ECONNREFUSED|ECONNRESET|fetch failed|network/i.test(streamErr.message || '');
@@ -401,6 +403,7 @@ export function createChatHandlerFromAgentCore(agent: any): ChatHandler {
         formatRecoveryResult: agent.formatRecoveryResult.bind(agent),
         getIdentityVars: agent.getIdentityVars.bind(agent),
         _cachedMemoryBlock: agent._cachedMemoryBlock,
+        getCachedMemoryBlock: () => agent._cachedMemoryBlock,
         _assemblyReport: agent._assemblyReport,
         sessionId: agent.sessionId,
         setMessages: (msgs: any[]) => { agent.messages = msgs; },
