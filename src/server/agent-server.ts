@@ -3,6 +3,7 @@
 import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import { AgentCore } from '@agent-system/core';
 import { agentEventBus } from '@agent-system/events';
 import { initConfig, getConfig } from '@agent-system/core';
@@ -1057,24 +1058,53 @@ const server = http.createServer(async (req, res) => {
         return Math.floor(n);
       };
 
-      const configPath = path.resolve(__dirname, '..', '..', 'config', 'default.json');
-      const raw = fs.readFileSync(configPath, 'utf-8');
-      const currentConfig = JSON.parse(raw);
+      const yamlPath = path.resolve(__dirname, '..', '..', 'config', 'agent-system.yaml');
+      const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
+      let yamlConfig: any;
+      try {
+        yamlConfig = yaml.load(yamlContent) || {};
+      } catch (e: any) {
+        logger.warn('[AgentServer] YAML 解析失败，无法更新配置', e);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'YAML 解析失败: ' + e.message }));
+        return;
+      }
       const changes: Record<string, unknown> = {};
 
-      if (model) { currentConfig.models.providers.lmstudio.model = model; changes.model = model; }
+      // 辅助函数：确保嵌套路径存在并设置值
+      const setNested = (obj: any, keys: string[], value: any) => {
+        let cur = obj;
+        for (let i = 0; i < keys.length - 1; i++) {
+          if (!cur[keys[i]] || typeof cur[keys[i]] !== 'object') cur[keys[i]] = {};
+          cur = cur[keys[i]];
+        }
+        cur[keys[keys.length - 1]] = value;
+      };
+
+      if (model) {
+        setNested(yamlConfig, ['models', 'providers', 'lmstudio', 'model'], model);
+        changes.model = model;
+      }
       const vTimeout = validatedTimeout(callTimeoutMs, 'callTimeoutMs', 1000, 3600000);
-      if (vTimeout !== null) { currentConfig.agent.callTimeoutMs = vTimeout; changes.callTimeoutMs = vTimeout; }
+      if (vTimeout !== null) {
+        setNested(yamlConfig, ['agent', 'callTimeoutMs'], vTimeout);
+        changes.callTimeoutMs = vTimeout;
+      }
       const vRetries = validatedTimeout(maxRetries, 'maxRetries', 0, 100);
-      if (vRetries !== null) { currentConfig.agent.maxRetries = vRetries; changes.maxRetries = vRetries; }
+      if (vRetries !== null) {
+        setNested(yamlConfig, ['agent', 'maxRetries'], vRetries);
+        changes.maxRetries = vRetries;
+      }
       const vTokens = validatedTimeout(maxTokens, 'maxTokens', 1, 100000);
-      if (vTokens !== null) { currentConfig.models.providers.lmstudio.maxTokens = vTokens; changes.maxTokens = vTokens; }
+      if (vTokens !== null) {
+        setNested(yamlConfig, ['models', 'providers', 'lmstudio', 'maxTokens'], vTokens);
+        changes.maxTokens = vTokens;
+      }
 
       // === 新增：支持 agent.debugLogging ===
       if (updates.agent?.debugLogging !== undefined) {
         const dbg = !!updates.agent.debugLogging;
-        if (!currentConfig.agent) currentConfig.agent = {};
-        currentConfig.agent.debugLogging = dbg;
+        setNested(yamlConfig, ['agent', 'debugLogging'], dbg);
         changes.debugLogging = dbg;
         // 即时生效：调整 logger 级别
         try {
@@ -1087,54 +1117,56 @@ const server = http.createServer(async (req, res) => {
 
       // === 新增：支持 logging.level / logging.maxFileSizeMB / logging.maxRotatedFiles ===
       if (updates.logging) {
-        if (!currentConfig.logging) currentConfig.logging = {};
         const validLevels = ['debug', 'info', 'warn', 'error'];
         if (updates.logging.level && validLevels.includes(updates.logging.level)) {
-          currentConfig.logging.level = updates.logging.level;
+          setNested(yamlConfig, ['logging', 'level'], updates.logging.level);
           changes.logLevel = updates.logging.level;
           try { logger.setLevel(updates.logging.level as any); } catch (e) { logger.warn('[AgentServer] setLevel 失败', e); }
         }
         if (updates.logging.maxFileSizeMB !== undefined) {
           const sz = Number(updates.logging.maxFileSizeMB);
-          if (Number.isFinite(sz) && sz > 0) { currentConfig.logging.maxFileSizeMB = sz; changes.maxFileSizeMB = sz; }
+          if (Number.isFinite(sz) && sz > 0) {
+            setNested(yamlConfig, ['logging', 'maxFileSizeMB'], sz);
+            changes.maxFileSizeMB = sz;
+          }
         }
         if (updates.logging.maxRotatedFiles !== undefined) {
           const nf = Number(updates.logging.maxRotatedFiles);
-          if (Number.isFinite(nf) && nf > 0) { currentConfig.logging.maxRotatedFiles = nf; changes.maxRotatedFiles = nf; }
+          if (Number.isFinite(nf) && nf > 0) {
+            setNested(yamlConfig, ['logging', 'maxRotatedFiles'], nf);
+            changes.maxRotatedFiles = nf;
+          }
         }
       }
 
       // === 新增：支持 models.providers.lmstudio.baseUrl 等 ===
       if (updates.models?.providers?.lmstudio) {
         const ls = updates.models.providers.lmstudio;
-        if (!currentConfig.models) currentConfig.models = { providers: { lmstudio: {} } };
-        if (!currentConfig.models.providers) currentConfig.models.providers = { lmstudio: {} };
-        if (!currentConfig.models.providers.lmstudio) currentConfig.models.providers.lmstudio = {};
-        if (ls.model) { currentConfig.models.providers.lmstudio.model = ls.model; changes.model = ls.model; }
-        if (ls.baseUrl) { currentConfig.models.providers.lmstudio.baseUrl = ls.baseUrl; changes.baseUrl = ls.baseUrl; }
+        if (ls.model) {
+          setNested(yamlConfig, ['models', 'providers', 'lmstudio', 'model'], ls.model);
+          changes.model = ls.model;
+        }
+        if (ls.baseUrl) {
+          setNested(yamlConfig, ['models', 'providers', 'lmstudio', 'baseUrl'], ls.baseUrl);
+          changes.baseUrl = ls.baseUrl;
+        }
       }
 
       if (chatTimeoutMs !== undefined) {
         const vChatTimeout = validatedTimeout(chatTimeoutMs, 'chatTimeoutMs', 5000, 3600000);
         if (vChatTimeout !== null) {
-          // 写入 YAML 配置的 server 段
-          const yamlPath = path.resolve(__dirname, '..', '..', 'config', 'agent-system.yaml');
-          try {
-            const yamlContent = fs.readFileSync(yamlPath, 'utf-8');
-            let updated = yamlContent;
-            if (/chatTimeoutMs:\s*\d+/.test(updated)) {
-              updated = updated.replace(/chatTimeoutMs:\s*\d+/, `chatTimeoutMs: ${vChatTimeout}`);
-            } else {
-              updated += `\nserver:\n  chatTimeoutMs: ${vChatTimeout}\n`;
-            }
-            fs.writeFileSync(yamlPath, updated, 'utf-8');
-          } catch (e) {
-            logger.warn('[AgentServer] 更新 chatTimeoutMs 到 YAML 失败', e);
-          }
+          setNested(yamlConfig, ['server', 'chatTimeoutMs'], vChatTimeout);
+          changes.chatTimeoutMs = vChatTimeout;
         }
       }
 
-      fs.writeFileSync(configPath, JSON.stringify(currentConfig, null, 2), 'utf-8');
+      // 写入 YAML 文件
+      try {
+        const newYamlContent = yaml.dump(yamlConfig, { lineWidth: -1, quotingType: '"' });
+        fs.writeFileSync(yamlPath, newYamlContent, 'utf-8');
+      } catch (e: any) {
+        logger.warn('[AgentServer] 写入 YAML 配置失败', e);
+      }
 
       // 同步更新内存中的配置，使 GET /api/config 立即反映更改
       initConfig();
