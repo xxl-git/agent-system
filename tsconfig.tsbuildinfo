@@ -1,1 +1,1 @@
-{"root":["./src/config.d.ts","./src/index.ts","./src/logger.d.ts","./src/__tests__/logger.test.ts","./src/server/agent-server.ts","./src/server/dashboard-api.ts","./src/server/session-store.ts"],"version":"5.9.3"}
+{"root":["./src/config.d.ts","./src/index.ts","./src/logger.d.ts","./src/__tests__/logger.test.ts","./src/server/agent-server.ts","./src/server/dashboard-api.ts","./src/server/session-store.ts","./src/server/routes/index.ts","./src/server/routes/router.ts"],"version":"5.9.3"}

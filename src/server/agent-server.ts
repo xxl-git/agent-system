@@ -10,6 +10,8 @@ import { initConfig, getConfig } from '@agent-system/core';
 import { logger, logContext } from '@agent-system/core';
 import { getFullDashboard, getProjectsSummary, getSkillsSummary, getAuditSummary, getModelSummary, getHealthSummary, getMemorySummary, getContextSummary, getFileListing, getLogStatus, getResilienceSummary } from './dashboard-api';
 import { sessionStore } from './session-store';
+import { createRouter, RouteDeps } from './routes';
+import { createRouteContext, parseUrl } from './routes/router';
 
 const PORT = parseInt(process.env.PORT || String(getConfig().server?.port || 19701), 10);
 const STATIC_DIR = path.resolve(__dirname, '..', '..');
@@ -146,6 +148,69 @@ function broadcastSSE(data: any) {
   }
 }
 
+// ─── 路由表（渐进式迁移：简单 GET 路由由路由表处理，复杂路由保留 if-else） ───
+const routeDeps: RouteDeps = {
+  get agentReady() { return agentReady; },
+  get agent() { return agent; },
+  ensureAgent,
+  broadcastSSE,
+  getFullDashboard,
+  getProjectsSummary,
+  getSkillsSummary,
+  getModelSummary,
+  getHealthSummary,
+  getMemorySummary,
+  getContextSummary,
+  getLogStatus,
+  getLogErrors: (limit: number) => {
+    // 从 dashboard-api 获取错误日志
+    try {
+      const logDir = path.join(process.cwd(), 'logs');
+      const files = fs.readdirSync(logDir).filter(f => f.includes('error') && f.endsWith('.log'));
+      const errors: any[] = [];
+      for (const f of files.slice(-3)) {
+        const content = fs.readFileSync(path.join(logDir, f), 'utf8');
+        const lines = content.split('\n').filter(Boolean).slice(-limit);
+        errors.push(...lines.map(l => { try { return JSON.parse(l); } catch { return { raw: l }; } }));
+      }
+      return { errors, count: errors.length };
+    } catch { return { errors: [], count: 0 }; }
+  },
+  getLogContent: (filename: string) => {
+    try {
+      const logDir = path.join(process.cwd(), 'logs');
+      const today = new Date().toISOString().split('T')[0];
+      const target = filename || `${today}.log`;
+      return fs.readFileSync(path.join(logDir, target), 'utf8');
+    } catch { return ''; }
+  },
+  getLogModules: () => {
+    // 从 logger 获取模块级日志配置
+    return { modules: {}, note: 'use POST /api/logs/modules to configure' };
+  },
+  getResilienceStatus: (agent: any) => getResilienceSummary(agent),
+  getTraceList: async (agent: any) => {
+    try {
+      const { getRecentTraces } = await import('@agent-system/resilience');
+      return getRecentTraces(50);
+    } catch { return { traces: [], note: 'tracer not available' }; }
+  },
+  getTrace: (traceId: string) => ({ traceId, note: 'not implemented' }),
+  getAssemblyList: () => ({ assemblies: [], note: 'not implemented' }),
+  getAssembly: (id: string) => ({ id, note: 'not implemented' }),
+  getModels: async (agent: any) => {
+    if (!agent) return { models: [], current: null, providers: [] };
+    // 委托给原有逻辑（保留在 agent-server.ts 中）
+    return null;
+  },
+  getConfig: () => getConfig(),
+  getSessions: () => sessionStore.listSessions(),
+  getSession: (id: string) => sessionStore.getSession(id),
+  getDashboardModels: getModelSummary,
+  sseClients,
+};
+const router = createRouter(routeDeps);
+
 // ─── HTTP Server ───
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -162,6 +227,24 @@ const server = http.createServer(async (req, res) => {
     'req_' + Date.now().toString(36);
 
   return logContext.run({ traceId }, async () => {
+
+  // ─── 路由表查找（渐进式迁移：先查路由表，未命中则 fall through 到原有 if-else） ───
+  const { pathname } = parseUrl(url);
+  const method = (req.method || 'GET') as any;
+  try {
+    const match = await router.lookup(method, pathname);
+    if (match) {
+      // 更新 agent 状态到 routeDeps
+      const ctx = await createRouteContext(req, res, match.params);
+      await router.execute(match.entry, ctx);
+      return;
+    }
+  } catch (err: any) {
+    logger.warn(`[Router] 路由处理错误: ${err?.message || err}`);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err?.message || 'router error' }));
+    return;
+  }
 
   // SSE 事件流
   if (url === '/api/events') {
