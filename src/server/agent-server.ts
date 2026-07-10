@@ -59,6 +59,23 @@ let agent: AgentCore | null = null;
 let agentInitPromise: Promise<AgentCore> | null = null;
 let agentReady = false;
 
+// ─── 聊天请求互斥锁（LM Studio 串行推理，避免并发请求互相阻塞） ───
+let chatMutex: Promise<void> = Promise.resolve();
+let streamChatInProgress = false;
+
+async function withChatMutex<T>(fn: () => Promise<T>): Promise<T> {
+  // 等待前一个请求完成
+  const previous = chatMutex;
+  let resolve!: () => void;
+  chatMutex = new Promise<void>((r) => { resolve = r; });
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    resolve();
+  }
+}
+
 async function ensureAgent(): Promise<AgentCore> {
   if (agent && agentReady) return agent;
   // 防止并发初始化
@@ -1226,7 +1243,7 @@ const server = http.createServer(async (req, res) => {
 
       const ag = await ensureAgent();
       const t0 = Date.now();
-      const reply = await ag.sendMessage(message);
+      const reply = await withChatMutex(() => ag.sendMessage(message));
       const duration = Date.now() - t0;
 
       broadcastSSE({ type: 'chat', input: message.slice(0, 100), output: reply.slice(0, 200), duration });
@@ -1245,6 +1262,12 @@ const server = http.createServer(async (req, res) => {
     if (!agentReady) {
       res.writeHead(503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Agent 正在初始化' }));
+      return;
+    }
+    // 检查是否有正在进行的流式聊天（LM Studio 串行推理，避免并发阻塞）
+    if (streamChatInProgress) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: '已有流式聊天正在进行，请稍后再试' }));
       return;
     }
     try {
@@ -1267,6 +1290,7 @@ const server = http.createServer(async (req, res) => {
 
       const ag = await ensureAgent();
       const t0 = Date.now();
+      streamChatInProgress = true;
 
       // 使用一次性监听器转发 chunk 事件到当前 response
       const chunkWriter = (chunk: string) => {
@@ -1293,6 +1317,7 @@ const server = http.createServer(async (req, res) => {
 
       // 请求关闭时清理监听器
       req.on('close', () => {
+        streamChatInProgress = false;
         agentEventBus.off('chat_chunk', chunkWriter);
         agentEventBus.off('chat_done', doneWriter);
         agentEventBus.off('chat_error', errorWriter);
@@ -1300,6 +1325,7 @@ const server = http.createServer(async (req, res) => {
 
       // 调用流式发送
       ag.sendMessageStream(message).then((fullReply) => {
+        streamChatInProgress = false;
         const duration = Date.now() - t0;
         // 如果 done 事件已经发送了，这里确保 response 已结束
         agentEventBus.off('chat_chunk', chunkWriter);
@@ -1313,6 +1339,7 @@ const server = http.createServer(async (req, res) => {
           res.end();
         }
       }).catch((err) => {
+        streamChatInProgress = false;
         agentEventBus.off('chat_chunk', chunkWriter);
         agentEventBus.off('chat_done', doneWriter);
         agentEventBus.off('chat_error', errorWriter);
@@ -1322,6 +1349,7 @@ const server = http.createServer(async (req, res) => {
         }
       });
     } catch (err: any) {
+      streamChatInProgress = false;
       if (!res.writableEnded) {
         res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
         res.end();
