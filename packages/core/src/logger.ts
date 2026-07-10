@@ -218,16 +218,38 @@ class Logger {
     const now = Date.now();
     const maxAge = this._logRetentionDays * 24 * 60 * 60 * 1000;
     let deleted = 0;
+    let archived = 0;
     try {
       const files = fs.readdirSync(this.logDir);
+      const todayLog = getTodayLogFilename();
+      const todayErrorLog = getTodayErrorFilename();
       for (const file of files) {
-        // 匹配 .log.N.gz 或 -errors.log.N.gz 格式
+        const filePath = path.join(this.logDir, file);
+        // 1. 清理过期的 .gz 轮转文件
         if (/\d+\.gz$/.test(file) && /\.log\.\d+\.gz$/.test(file)) {
-          const filePath = path.join(this.logDir, file);
           const stat = fs.statSync(filePath);
           if (now - stat.mtimeMs > maxAge) {
             fs.unlinkSync(filePath);
             deleted++;
+          }
+          continue;
+        }
+        // 2. 归档过大的未压缩旧日志文件（非当天的 .log 文件）
+        if (/\.log$/.test(file) && file !== todayLog && file !== todayErrorLog) {
+          try {
+            const stat = fs.statSync(filePath);
+            // 超过保留天数 或 超过大小阈值（3MB）的旧日志，压缩归档
+            if (now - stat.mtimeMs > maxAge || stat.size >= 3 * 1024 * 1024) {
+              const gzPath = filePath + '.gz';
+              const content = fs.readFileSync(filePath);
+              const gzipped = zlib.gzipSync(content);
+              fs.writeFileSync(gzPath, gzipped);
+              fs.unlinkSync(filePath);
+              archived++;
+              console.log(`[Logger] 归档旧日志: ${file} → ${file}.gz (${(content.length / 1024 / 1024).toFixed(2)} MB)`);
+            }
+          } catch (err) {
+            console.error(`[Logger] 归档 ${file} 失败: ${err}`);
           }
         }
       }
@@ -237,7 +259,10 @@ class Logger {
     if (deleted > 0) {
       console.log(`[Logger] 清理了 ${deleted} 个过期轮转日志文件`);
     }
-    return deleted;
+    if (archived > 0) {
+      console.log(`[Logger] 归档了 ${archived} 个旧日志文件`);
+    }
+    return deleted + archived;
   }
 
   /** 启动时若当日日志已超阈值，立即轮转 */

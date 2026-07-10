@@ -477,6 +477,20 @@ export function getLogStatus(): any {
     .sort((a: any, b: any) => b.mtime.getTime() - a.mtime.getTime());
 
   const totalSize = files.reduce((sum: number, f: any) => sum + f.size, 0);
+
+  // 检测大文件告警（超过 5MB 的未压缩 .log 文件）
+  const LARGE_FILE_THRESHOLD = 3 * 1024 * 1024;
+  const largeFiles = files.filter((f: any) => !f.isGz && f.size >= LARGE_FILE_THRESHOLD);
+  const alerts: string[] = [];
+  if (largeFiles.length > 0) {
+    for (const f of largeFiles) {
+      alerts.push(`大日志文件: ${f.name} (${(f.size / 1024 / 1024).toFixed(2)} MB)，建议压缩或清理`);
+    }
+  }
+  if (totalSize > 100 * 1024 * 1024) {
+    alerts.push(`日志目录总大小超过 100MB (${(totalSize / 1024 / 1024).toFixed(2)} MB)，建议清理`);
+  }
+
   return {
     enabled: true,
     dir: fullPath,
@@ -484,6 +498,7 @@ export function getLogStatus(): any {
     maxRotatedFiles: (config.logging as any).maxRotatedFiles || 5,
     files: files.slice(0, 10),
     totalSize,
+    alerts,
   };
 }
 

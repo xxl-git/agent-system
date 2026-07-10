@@ -76,6 +76,32 @@ async function withChatMutex<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+// ─── SSE 心跳保活（防止代理/浏览器超时断连） ───
+// 每 25 秒发送一个注释行，保持连接活跃
+const SSE_HEARTBEAT_INTERVAL_MS = 25000;
+let sseHeartbeatTimer: NodeJS.Timeout | null = null;
+function startSseHeartbeat() {
+  if (sseHeartbeatTimer) return;
+  sseHeartbeatTimer = setInterval(() => {
+    for (const c of sseClients) {
+      try {
+        // SSE 协议：以冒号开头的行是注释，客户端会忽略
+        c.write(': heartbeat\n\n');
+      } catch {
+        sseClients.delete(c);
+      }
+    }
+  }, SSE_HEARTBEAT_INTERVAL_MS);
+  // 不阻止进程退出
+  sseHeartbeatTimer.unref();
+}
+function stopSseHeartbeat() {
+  if (sseHeartbeatTimer) {
+    clearInterval(sseHeartbeatTimer);
+    sseHeartbeatTimer = null;
+  }
+}
+
 async function ensureAgent(): Promise<AgentCore> {
   if (agent && agentReady) return agent;
   // 防止并发初始化
@@ -1555,10 +1581,10 @@ export function getCurrentTraceId(): string | null {
   return logger.getTraceId();
 }
 
-function readBody(req: http.IncomingMessage): Promise<string> {
+function readBody(req: http.IncomingMessage, maxBytes: number = 1_000_000): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', c => { body += c; if (body.length > 1_000_000) reject(new Error('body too large')); });
+    req.on('data', c => { body += c; if (body.length > maxBytes) reject(new Error(`body too large (limit: ${maxBytes} bytes)`)); });
     req.on('end', () => resolve(body));
     req.on('error', reject);
   });
@@ -1610,6 +1636,7 @@ console.log(`[Startup] 准备监听端口 ${PORT}...`);
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[Startup] ✓ 端口 ${PORT} 监听成功`);
   console.log(`Agent HTTP Server: http://127.0.0.1:${PORT}`);
+  startSseHeartbeat();
   ensureAgent().catch(err => console.error('[AgentServer] 初始化失败:', err.message));
 });
 
@@ -1617,4 +1644,52 @@ server.on('error', (err) => {
   console.error(`[Startup] ✗ 监听失败:`, err);
 });
 
-process.on('SIGINT', () => { agent?.stop(); server.close(); process.exit(0); });
+// ─── 优雅关闭 ───
+let shuttingDown = false;
+function gracefulShutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[Shutdown] 收到 ${signal}，开始优雅关闭...`);
+
+  // 1. 停止接受新连接
+  server.close(() => {
+    console.log('[Shutdown] ✓ HTTP 服务器已关闭');
+  });
+
+  // 2. 停止 Agent（保存会话/审计/摘要）
+  try {
+    agent?.stop();
+    console.log('[Shutdown] ✓ Agent 已停止');
+  } catch (err: any) {
+    console.error('[Shutdown] Agent 停止失败:', err?.message);
+  }
+
+  // 3. 关闭所有 SSE 客户端连接
+  stopSseHeartbeat();
+  for (const c of sseClients) {
+    try { c.end(); } catch { /* ignore */ }
+  }
+  sseClients.clear();
+
+  // 4. 等待 1 秒让清理完成，然后强制退出
+  setTimeout(() => {
+    console.log('[Shutdown] 完成，退出进程');
+    process.exit(0);
+  }, 1000);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// ─── 全局未捕获异常兜底（防止进程崩溃） ───
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[UnhandledRejection]', reason);
+  logger?.error?.('[UnhandledRejection]', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[UncaughtException]', err);
+  logger?.error?.('[UncaughtException]', err);
+  // 不立即退出，记录后继续运行（避免单次错误导致服务中断）
+  // 但如果是致命错误（如 EADDRINUSE），仍会触发 gracefulShutdown
+});

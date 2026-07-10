@@ -224,6 +224,16 @@ class AgentCore {
         catch (err) {
             logger.warn('[Agent] 文件记忆裁剪失败', err);
         }
+        // Step 1b: 清理过期日志 + 归档大日志文件
+        try {
+            const cleaned = logger.cleanupOldLogs();
+            if (cleaned > 0) {
+                logger.info(`[Agent] 清理/归档了 ${cleaned} 个旧日志文件`);
+            }
+        }
+        catch (err) {
+            logger.warn('[Agent] 日志清理失败', err);
+        }
         // Step 2: 检测待恢复的长任务检查点（不再清除，支持跨会话恢复）
         try {
             const pendingTasks = this.checkpointMgr.listPendingTasks();
