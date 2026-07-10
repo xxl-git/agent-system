@@ -30,6 +30,7 @@ export interface RouteDeps {
   getConfig: () => any;
   getSessions: () => any;
   getSession: (id: string) => any;
+  createSession: (title?: string) => any;
   getDashboardModels: (agent: any) => Promise<any>;
   sseClients: Set<any>;
   // logger 模块（POST /api/logs/* 需要）
@@ -244,6 +245,21 @@ export function createRouter(deps: RouteDeps): Router {
     // traceId 设置 — 纯粹委托给 logger（保留在 agent-server.ts 中复杂逻辑）
     // 这里简单返回，实际处理由 fall-through 完成
     sendJson(ctx.res, { ok: true, note: 'use agent-server fallthrough' });
+  });
+
+  // ═══════════════════════════════════════════════════
+  // POST Routes — Sessions
+  // ═══════════════════════════════════════════════════
+
+  router.post('/api/sessions', (ctx) => {
+    try {
+      const { title } = ctx.body || {};
+      // sessionStore.createSession 已由 deps 提供
+      const session = deps.createSession(title);
+      sendJson(ctx.res, session);
+    } catch (err: any) {
+      sendError(ctx.res, err.message, 500);
+    }
   });
 
   return router;
