@@ -208,6 +208,17 @@ const routeDeps: RouteDeps = {
   getSession: (id: string) => sessionStore.getSession(id),
   getDashboardModels: getModelSummary,
   sseClients,
+  logger: {
+    setLevel: (level: string) => logger.setLevel(level as any),
+    getLevel: () => logger.getLevel(),
+    cleanupOldLogs: () => logger.cleanupOldLogs(),
+    setModuleLevel: (module: string, level: string | null) => logger.setModuleLevel(module, level as any),
+    getModuleLevels: () => logger.getModuleLevels(),
+    setBufferSize: (size: number) => logger.setBufferSize(size),
+    flush: () => logger.flush(),
+    setJsonFormat: (enabled: boolean) => logger.setJsonFormat(enabled),
+    getJsonFormat: () => logger.getJsonFormat(),
+  },
 };
 const router = createRouter(routeDeps);
 

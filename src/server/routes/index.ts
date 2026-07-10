@@ -32,6 +32,18 @@ export interface RouteDeps {
   getSession: (id: string) => any;
   getDashboardModels: (agent: any) => Promise<any>;
   sseClients: Set<any>;
+  // logger 模块（POST /api/logs/* 需要）
+  logger: {
+    setLevel: (level: string) => void;
+    getLevel: () => string;
+    cleanupOldLogs: () => number;
+    setModuleLevel: (module: string, level: string | null) => void;
+    getModuleLevels: () => any;
+    setBufferSize: (size: number) => void;
+    flush: () => void;
+    setJsonFormat: (enabled: boolean) => void;
+    getJsonFormat: () => boolean;
+  };
 }
 
 /** 创建并注册所有路由 */
@@ -164,6 +176,74 @@ export function createRouter(deps: RouteDeps): Router {
 
   router.get('/api/sessions', (ctx) => {
     sendJson(ctx.res, deps.getSessions());
+  });
+
+  // ═══════════════════════════════════════════════════
+  // POST Routes — Logs
+  // ═══════════════════════════════════════════════════
+
+  const VALID_LOG_LEVELS = ['debug', 'info', 'warn', 'error'];
+
+  router.post('/api/logs/level', (ctx) => {
+    const { level } = ctx.body || {};
+    if (!VALID_LOG_LEVELS.includes(level)) {
+      sendError(ctx.res, `无效日志级别: ${level}，可选: ${VALID_LOG_LEVELS.join(', ')}`, 400);
+      return;
+    }
+    deps.logger.setLevel(level);
+    sendJson(ctx.res, { ok: true, level: deps.logger.getLevel() });
+  });
+
+  router.post('/api/logs/cleanup', (ctx) => {
+    const deleted = deps.logger.cleanupOldLogs();
+    sendJson(ctx.res, { ok: true, deletedFiles: deleted });
+  });
+
+  router.post('/api/logs/modules', (ctx) => {
+    const { module, level } = ctx.body || {};
+    if (!module || typeof module !== 'string') {
+      sendError(ctx.res, '缺少 module 参数', 400);
+      return;
+    }
+    if (level !== null && !VALID_LOG_LEVELS.includes(level)) {
+      sendError(ctx.res, `无效日志级别: ${level}，可选: ${VALID_LOG_LEVELS.join(', ')}，null 恢复全局`, 400);
+      return;
+    }
+    deps.logger.setModuleLevel(module, level || null);
+    sendJson(ctx.res, { ok: true, module, level: level || '(global)', all: deps.logger.getModuleLevels() });
+  });
+
+  router.post('/api/logs/buffer', (ctx) => {
+    const { bufferSize } = ctx.body || {};
+    if (bufferSize !== undefined) {
+      if (typeof bufferSize !== 'number' || bufferSize < 1 || bufferSize > 10000) {
+        sendError(ctx.res, 'bufferSize 必须是 1-10000 的整数（1=禁用缓冲）', 400);
+        return;
+      }
+      deps.logger.setBufferSize(bufferSize);
+    }
+    sendJson(ctx.res, { ok: true, bufferSize });
+  });
+
+  router.post('/api/logs/flush', (ctx) => {
+    deps.logger.flush();
+    sendJson(ctx.res, { ok: true });
+  });
+
+  router.post('/api/logs/json', (ctx) => {
+    const { enabled } = ctx.body || {};
+    if (typeof enabled !== 'boolean') {
+      sendError(ctx.res, 'enabled 必须是 boolean', 400);
+      return;
+    }
+    deps.logger.setJsonFormat(enabled);
+    sendJson(ctx.res, { ok: true, jsonFormat: deps.logger.getJsonFormat() });
+  });
+
+  router.post('/api/logs/trace', (ctx) => {
+    // traceId 设置 — 纯粹委托给 logger（保留在 agent-server.ts 中复杂逻辑）
+    // 这里简单返回，实际处理由 fall-through 完成
+    sendJson(ctx.res, { ok: true, note: 'use agent-server fallthrough' });
   });
 
   return router;
