@@ -208,6 +208,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: GET /api/health — 轻量级健康检查（用于 Docker/K8s liveness/readiness 探针）
+  if (url === '/api/health' && isGet()) {
+    const healthy = agentReady;
+    res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      status: healthy ? 'ok' : 'initializing',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    }));
+    return;
+  }
+
   // API: GET /api/dashboard — 完整仪表盘数据
   if (url === '/api/dashboard' && isGet()) {
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1292,8 +1304,11 @@ const server = http.createServer(async (req, res) => {
     }
     // 检查是否有正在进行的流式聊天（LM Studio 串行推理，避免并发阻塞）
     if (streamChatInProgress) {
-      res.writeHead(429, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: '已有流式聊天正在进行，请稍后再试' }));
+      res.writeHead(429, {
+        'Content-Type': 'application/json',
+        'Retry-After': '10',
+      });
+      res.end(JSON.stringify({ error: '已有流式聊天正在进行，请稍后再试', retryAfter: 10 }));
       return;
     }
     try {

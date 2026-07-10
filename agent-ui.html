@@ -2222,7 +2222,13 @@ async function send() {
       signal: genAbort.signal,
     });
 
-    if (!resp.ok) throw new Error('Stream HTTP ' + resp.status);
+    if (!resp.ok) {
+      let errMsg = 'Stream HTTP ' + resp.status;
+      if (resp.status === 429) errMsg = '429 Rate Limit - 请求频率过高，请稍后重试';
+      else if (resp.status === 503) errMsg = '503 Service Unavailable - 模型服务不可用';
+      else if (resp.status === 502) errMsg = '502 Bad Gateway - 网关错误';
+      throw new Error(errMsg);
+    }
 
     // 使用 ReadableStream 消费 SSE
     const reader = resp.body.getReader();
@@ -2304,9 +2310,30 @@ async function send() {
         err.message.includes('超时') ||
         (err.message.includes('HTTP') && (err.message.includes('408') || err.message.includes('504')))
       );
+      // 判断是否为 429 Rate Limit / 503 Service Unavailable
+      const isRateLimited = err.message && (
+        err.message.includes('429') ||
+        err.message.toLowerCase().includes('rate limit') ||
+        err.message.toLowerCase().includes('too many requests')
+      );
+      const isServiceUnavailable = err.message && (
+        err.message.includes('503') ||
+        err.message.toLowerCase().includes('service unavailable') ||
+        err.message.toLowerCase().includes('model_unreachable')
+      );
       const elapsed = Date.now() - t0;
 
-      if (isTimeout) {
+      if (isRateLimited) {
+        // 429 Rate Limit — 提示用户稍后重试
+        streamingEl.div.remove();
+        addMsg('system', `⏳ 请求频率过高（429 Rate Limit）\n\n已等待 ${formatDuration(elapsed)}\n\n建议：\n① 等待 30 秒后重试\n② 降低请求频率\n③ 如使用云模型，检查 API 配额`, { error: true });
+        showToast('⏳ 请求频率过高，请稍后重试', 'error');
+      } else if (isServiceUnavailable) {
+        // 503 / model_unreachable — 模型不可用
+        streamingEl.div.remove();
+        addMsg('system', `🔌 模型服务不可用\n\n已等待 ${formatDuration(elapsed)}\n\n可能原因：\n• LM Studio 未启动或已崩溃\n• 模型未加载或加载失败\n• 网络连接问题\n\n建议：\n① 检查 LM Studio 是否运行\n② 点击 🔄 刷新模型列表\n③ 尝试切换到其他已加载模型`, { error: true });
+        showToast('🔌 模型服务不可用，请检查 LM Studio', 'error');
+      } else if (isTimeout) {
         // 超时提示 — 友好提示
         streamingEl.div.remove();
         addMsg('system', `⏰ 模型响应超时（已等待 ${formatDuration(elapsed)}）\n\n可能原因：\n• 模型「${currentModel}」响应较慢，当前配置超时时间为 ${document.getElementById('cfgChatTimeout')?.value || 120000}ms\n• LM Studio 服务未响应\n• 模型正在处理其他请求\n\n建议：\n① 在⚙设置中增加「聊天接口超时」时间\n② 尝试切换更轻量的模型\n③ 检查 LM Studio 是否正常运行`, { error: true });

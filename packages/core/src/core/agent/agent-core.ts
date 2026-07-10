@@ -336,6 +336,8 @@ class AgentCore {
         this.nonsenseDetector.startMonitor();
         // 注册诊断探活定时任务
         this.registerDiagnosticPingTask();
+        // 注册模型列表心跳任务（定期检测 LM Studio 加载/卸载）
+        this.registerModelListHeartbeat();
         // 注册 A 型主动性空闲任务（记忆整理 + 任务监控检查 + 会话摘要 GC）
         this.registerProactiveTasks();
         // Phase 5: 启动韧性心跳（必须在 nonsenseDetector 和诊断任务注册之后）
@@ -2164,6 +2166,58 @@ class AgentCore {
                     logger.debug(`[HealthPing] LM Studio OK | 空闲任务: ${stats.pending}待处理, ${stats.executed}已执行`);
                 }
                 return false; // 保留在队列中持续执行
+            },
+        });
+    }
+    /** 注册模型列表心跳任务 — 定期检查 LM Studio 加载/卸载的模型 */
+    registerModelListHeartbeat() {
+        const idleCfg = agent_system_config_1.getConfigSection('idleTasks');
+        this.idleTaskMgr.register({
+            id: 'model-list-heartbeat',
+            name: '模型列表心跳',
+            description: '定期检查 LM Studio 加载/卸载的模型列表变化，自动同步',
+            priority: 'P2',
+            cooldownMs: 5 * 60 * 1000, // 5 分钟检查一次
+            lastRun: 0,
+            running: false,
+            createdAt: Date.now(),
+            failCount: 0,
+            maxFails: idleCfg?.defaultMaxFails ?? 3,
+            execute: async () => {
+                try {
+                    const currentModels = await this.adapter.listModels();
+                    const currentIds = new Set(currentModels.map((m: any) => m.id));
+                    const previousIds = new Set(this._availableModels.map((m: any) => m.id));
+                    // 检测变化
+                    const added = currentModels.filter((m: any) => !previousIds.has(m.id));
+                    const removed = this._availableModels.filter((m: any) => !currentIds.has(m.id));
+                    if (added.length > 0 || removed.length > 0) {
+                        this._availableModels = currentModels;
+                        if (added.length > 0) {
+                            logger.info(`[ModelHeartbeat] 检测到新加载模型: ${added.map((m: any) => m.id).join(', ')}`);
+                        }
+                        if (removed.length > 0) {
+                            logger.warn(`[ModelHeartbeat] 检测到模型已卸载: ${removed.map((m: any) => m.id).join(', ')}`);
+                            // 如果当前使用的模型被卸载，发出告警
+                            if (removed.some((m: any) => m.id === this.adapter.model)) {
+                                logger.error(`[ModelHeartbeat] ⚠️ 当前使用模型 ${this.adapter.model} 已被卸载！请切换到其他模型`);
+                            }
+                        }
+                        // 广播模型列表变化事件
+                        try {
+                            agentEventBus.emit('status', {
+                                type: 'model_list_changed',
+                                added: added.map((m: any) => m.id),
+                                removed: removed.map((m: any) => m.id),
+                                total: currentModels.length,
+                            });
+                        } catch { /* ignore */ }
+                    }
+                    return false; // 保留在队列中持续执行
+                } catch (err) {
+                    logger.debug(`[ModelHeartbeat] 检查失败（非阻塞）: ${err}`);
+                    return false;
+                }
             },
         });
     }
