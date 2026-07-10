@@ -31,6 +31,9 @@ export interface RouteDeps {
   getSessions: () => any;
   getSession: (id: string) => any;
   createSession: (title?: string) => any;
+  renameSession: (id: string, title: string) => void;
+  updateMessages: (id: string, messages: any[]) => void;
+  deleteSession: (id: string) => void;
   getDashboardModels: (agent: any) => Promise<any>;
   sseClients: Set<any>;
   // logger 模块（POST /api/logs/* 需要）
@@ -257,6 +260,39 @@ export function createRouter(deps: RouteDeps): Router {
       // sessionStore.createSession 已由 deps 提供
       const session = deps.createSession(title);
       sendJson(ctx.res, session);
+    } catch (err: any) {
+      sendError(ctx.res, err.message, 500);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
+  // Param Routes — :id patterns
+  // ═══════════════════════════════════════════════════
+
+  router.get('/api/sessions/:id', (ctx) => {
+    const session = deps.getSession(ctx.params.id);
+    if (!session) {
+      sendError(ctx.res, '会话不存在', 404);
+      return;
+    }
+    sendJson(ctx.res, session);
+  });
+
+  router.put('/api/sessions/:id', (ctx) => {
+    try {
+      const { title, messages } = ctx.body || {};
+      if (title) deps.renameSession(ctx.params.id, title);
+      if (messages) deps.updateMessages(ctx.params.id, messages);
+      sendJson(ctx.res, { ok: true });
+    } catch (err: any) {
+      sendError(ctx.res, err.message, 500);
+    }
+  });
+
+  router.delete('/api/sessions/:id', (ctx) => {
+    try {
+      deps.deleteSession(ctx.params.id);
+      sendJson(ctx.res, { ok: true });
     } catch (err: any) {
       sendError(ctx.res, err.message, 500);
     }

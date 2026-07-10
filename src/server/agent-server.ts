@@ -207,6 +207,9 @@ const routeDeps: RouteDeps = {
   getSessions: () => sessionStore.listSessions(),
   getSession: (id: string) => sessionStore.getSession(id),
   createSession: (title?: string) => sessionStore.createSession(title),
+  renameSession: (id: string, title: string) => sessionStore.renameSession(id, title),
+  updateMessages: (id: string, messages: any[]) => sessionStore.updateMessages(id, messages),
+  deleteSession: (id: string) => sessionStore.deleteSession(id),
   getDashboardModels: getModelSummary,
   sseClients,
   logger: {
