@@ -202,6 +202,11 @@ export const DEFAULT_CONFIG: AgentSystemConfig = {
     concurrency: 1,
     timeoutMs: 60_000,
   },
+  server: {
+    port: 19701,
+    chatTimeoutMs: 300000,
+    maxUploadSizeMB: 20,
+  },
   profiles: {
     dataDir: 'data/profiles',
   },
@@ -223,6 +228,7 @@ function deepMergeDefaults(user: any, defaults: any): any {
   if (typeof defaults !== 'object' || defaults === null) return user ?? defaults;
   if (typeof user !== 'object' || user === null) return defaults;
   const result: any = {};
+  // 先遍历 defaults 的 keys（已知字段）
   for (const key of Object.keys(defaults)) {
     if (key in user) {
       if (typeof defaults[key] === 'object' && defaults[key] !== null && !Array.isArray(defaults[key])) {
@@ -240,6 +246,12 @@ function deepMergeDefaults(user: any, defaults: any): any {
       }
     } else {
       result[key] = defaults[key];
+    }
+  }
+  // 再遍历 user 独有的 keys（defaults 中不存在的字段，如 YAML 新增的配置项）
+  for (const key of Object.keys(user)) {
+    if (!(key in result)) {
+      result[key] = user[key];
     }
   }
   return result;

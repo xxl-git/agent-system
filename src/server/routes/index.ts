@@ -48,6 +48,8 @@ export interface RouteDeps {
     setJsonFormat: (enabled: boolean) => void;
     getJsonFormat: () => boolean;
   };
+  // config 写入（POST /api/config 需要）
+  updateConfig: (updates: any) => Promise<{ changes: Record<string, unknown> }>;
 }
 
 /** 创建并注册所有路由 */
@@ -171,7 +173,22 @@ export function createRouter(deps: RouteDeps): Router {
   // ═══════════════════════════════════════════════════
 
   router.get('/api/config', (ctx) => {
-    sendJson(ctx.res, deps.getConfig());
+    const cfg = deps.getConfig();
+    sendJson(ctx.res, {
+      model: cfg.models?.providers?.lmstudio?.model || 'unknown',
+      baseUrl: cfg.models?.providers?.lmstudio?.baseUrl || 'http://127.0.0.1:1234/v1',
+      callTimeoutMs: cfg.agent?.callTimeoutMs || 60000,
+      maxRetries: cfg.agent?.maxRetries ?? 1,
+      maxOutputTokens: cfg.models?.providers?.lmstudio?.maxOutputTokens || 2048,
+      heartbeatIntervalMs: cfg.agent?.heartbeatIntervalMs || 300000,
+      chatTimeoutMs: cfg.server?.chatTimeoutMs || 120000,
+      agent: { debugLogging: cfg.agent?.debugLogging ?? false },
+      logging: {
+        level: cfg.logging?.level || 'info',
+        maxFileSizeMB: cfg.logging?.maxFileSizeMB || 10,
+        maxRotatedFiles: cfg.logging?.maxRotatedFiles || 5,
+      },
+    });
   });
 
   // ═══════════════════════════════════════════════════
@@ -293,6 +310,19 @@ export function createRouter(deps: RouteDeps): Router {
     try {
       deps.deleteSession(ctx.params.id);
       sendJson(ctx.res, { ok: true });
+    } catch (err: any) {
+      sendError(ctx.res, err.message, 500);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
+  // POST Routes — Config
+  // ═══════════════════════════════════════════════════
+
+  router.post('/api/config', async (ctx) => {
+    try {
+      const result = await deps.updateConfig(ctx.body || {});
+      sendJson(ctx.res, { ok: true, message: '配置已更新，重启后生效', changes: result.changes });
     } catch (err: any) {
       sendError(ctx.res, err.message, 500);
     }
