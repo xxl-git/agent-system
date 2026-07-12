@@ -1,7 +1,7 @@
 // 路由注册 — 将分散在 agent-server.ts 中的 if-else 路由提取为集中式路由表
 // 渐进式迁移：先迁移简单 GET 路由，复杂路由保留在 agent-server.ts 中
 
-import { Router, RouteContext, sendJson, sendError } from './router.js';
+import { Router, RouteContext, sendJson, sendError, readBodyStream } from './router.js';
 
 // 外部依赖接口（由 agent-server.ts 注入）
 export interface RouteDeps {
@@ -50,6 +50,28 @@ export interface RouteDeps {
   };
   // config 写入（POST /api/config 需要）
   updateConfig: (updates: any) => Promise<{ changes: Record<string, unknown> }>;
+  // 模型管理（POST /api/models/* 需要）
+  switchModel: (modelId: string) => Promise<any>;
+  scanModels: () => Promise<any>;
+  loadModel: (model: string, options: any) => Promise<any>;
+  unloadModel: (instanceId: string) => Promise<any>;
+  // 聊天（POST /api/chat[/stream] 需要）
+  sendChat: (message: string) => Promise<string>;
+  sendChatStream: (message: string, writers: StreamWriters) => Promise<string>;
+  // 文件上传（POST /api/upload 需要）
+  saveUpload: (rawBody: Buffer, contentType: string) => Promise<any>;
+  // trace 报告（GET /api/trace 需要）
+  getTraceReport: (sessionId?: string) => any;
+  getAssemblyReport: (sessionId?: string) => any;
+  // 流式聊天并发标志（POST /api/chat/stream 需要）
+  streamChatInProgress: { value: boolean };
+}
+
+export interface StreamWriters {
+  onChunk: (chunk: string) => void;
+  onDone: (data: { fullReply: string; durationMs: number }) => void;
+  onError: (error: string) => void;
+  onClose: () => void;
 }
 
 /** 创建并注册所有路由 */
@@ -323,6 +345,296 @@ export function createRouter(deps: RouteDeps): Router {
     try {
       const result = await deps.updateConfig(ctx.body || {});
       sendJson(ctx.res, { ok: true, message: '配置已更新，重启后生效', changes: result.changes });
+    } catch (err: any) {
+      sendError(ctx.res, err.message, 500);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
+  // SSE Events
+  // ═══════════════════════════════════════════════════
+
+  router.get('/api/events', (ctx) => {
+    ctx.res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+    ctx.res.write('data: {"type":"connected"}\n\n');
+    deps.sseClients.add(ctx.res);
+    ctx.req.on('close', () => deps.sseClients.delete(ctx.res));
+  });
+
+  // ═══════════════════════════════════════════════════
+  // Trace & Assembly
+  // ═══════════════════════════════════════════════════
+
+  router.get('/api/trace', (ctx) => {
+    try {
+      const report = deps.getTraceReport();
+      if (!report) {
+        sendJson(ctx.res, { trace: null, message: 'No trace data available' });
+        return;
+      }
+      sendJson(ctx.res, {
+        sessionId: report.sessionId,
+        hasError: report.hasError,
+        totalDurationMs: report.totalDurationMs,
+        chainText: report.chainText,
+        startedAt: report.startedAt,
+      });
+    } catch (err: any) {
+      sendError(ctx.res, err.message, 500);
+    }
+  });
+
+  router.get('/api/trace/:sessionId', (ctx) => {
+    try {
+      const report = deps.getTraceReport(ctx.params.sessionId);
+      if (!report) {
+        sendError(ctx.res, 'TraceNotFound', 404);
+        return;
+      }
+      sendJson(ctx.res, {
+        sessionId: report.sessionId,
+        hasError: report.hasError,
+        totalDurationMs: report.totalDurationMs,
+        chainText: report.chainText,
+        startedAt: report.startedAt,
+      });
+    } catch (err: any) {
+      sendError(ctx.res, err.message, 500);
+    }
+  });
+
+  router.get('/api/assembly', (ctx) => {
+    try {
+      const report = deps.getAssemblyReport();
+      if (!report) {
+        sendJson(ctx.res, { report: null, message: 'No assembly data' });
+        return;
+      }
+      sendJson(ctx.res, report);
+    } catch (err: any) {
+      sendError(ctx.res, err.message, 500);
+    }
+  });
+
+  router.get('/api/assembly/:sessionId', (ctx) => {
+    try {
+      const report = deps.getAssemblyReport(ctx.params.sessionId);
+      if (!report) {
+        sendError(ctx.res, 'AssemblyReportNotFound', 404);
+        return;
+      }
+      sendJson(ctx.res, report);
+    } catch (err: any) {
+      sendError(ctx.res, err.message, 500);
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
+  // Models — POST routes
+  // ═══════════════════════════════════════════════════
+
+  router.post('/api/models/switch', async (ctx) => {
+    if (!deps.agentReady) {
+      sendError(ctx.res, 'Agent 尚未初始化', 503);
+      return;
+    }
+    try {
+      const { model: modelId } = ctx.body || {};
+      if (!modelId || typeof modelId !== 'string') {
+        sendError(ctx.res, '缺少 model 字段', 400);
+        return;
+      }
+      const result = await deps.switchModel(modelId);
+      sendJson(ctx.res, {
+        ok: true,
+        previousModel: result.previousModel,
+        currentModel: result.currentModel,
+        contextLength: result.contextLength || 0,
+        arch: result.arch || 'unknown',
+        publisher: result.publisher || 'unknown',
+        message: `模型已切换: ${result.previousModel} → ${result.currentModel}`,
+      });
+    } catch (err: any) {
+      const status = err.message?.includes('未在 LM Studio') ? 404 : err.message?.includes('无法连接') ? 502 : 500;
+      sendError(ctx.res, err.message, status);
+    }
+  });
+
+  router.post('/api/models/scan', async (ctx) => {
+    try {
+      const result = await deps.scanModels();
+      sendJson(ctx.res, result);
+    } catch (err: any) {
+      const errMsg = err.message || '';
+      const isConnectionRefused = errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch failed') || errMsg.includes('aggregateError');
+      sendJson(ctx.res, {
+        ok: false,
+        models: [],
+        currentModelOnline: false,
+        error: isConnectionRefused ? 'LM Studio 服务未启动 (ECONNREFUSED)' : errMsg,
+        connected: false,
+        hint: isConnectionRefused ? '请启动 LM Studio 并加载模型' : undefined,
+      });
+    }
+  });
+
+  router.post('/api/models/load', async (ctx) => {
+    try {
+      const { model, context_length, flash_attention, eval_batch_size, num_experts } = ctx.body || {};
+      if (!model) {
+        sendJson(ctx.res, { ok: false, error: '参数 model 为必填' });
+        return;
+      }
+      const options: any = {};
+      if (context_length) options.context_length = context_length;
+      if (typeof flash_attention === 'boolean') options.flash_attention = flash_attention;
+      if (eval_batch_size) options.eval_batch_size = eval_batch_size;
+      if (num_experts) options.num_experts = num_experts;
+      const result = await deps.loadModel(model, options);
+      sendJson(ctx.res, {
+        ok: true,
+        model,
+        instance_id: result.instance_id,
+        load_time_seconds: result.load_time_seconds,
+        status: result.status,
+        type: result.type,
+      });
+    } catch (err: any) {
+      sendJson(ctx.res, { ok: false, error: err.message || '加载失败' });
+    }
+  });
+
+  router.post('/api/models/unload', async (ctx) => {
+    try {
+      const { instance_id } = ctx.body || {};
+      if (!instance_id) {
+        sendJson(ctx.res, { ok: false, error: '参数 instance_id 为必填' });
+        return;
+      }
+      const result = await deps.unloadModel(instance_id);
+      sendJson(ctx.res, { ok: true, instance_id: result.instance_id });
+    } catch (err: any) {
+      sendJson(ctx.res, { ok: false, error: err.message || '卸载失败' });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
+  // Chat
+  // ═══════════════════════════════════════════════════
+
+  router.post('/api/chat', async (ctx) => {
+    if (!deps.agentReady) {
+      sendJson(ctx.res, { reply: 'Agent 正在初始化，请稍候...', duration: 0 }, 503);
+      return;
+    }
+    try {
+      const { message } = ctx.body || {};
+      if (!message || typeof message !== 'string') {
+        sendError(ctx.res, '缺少 message 字段', 400);
+        return;
+      }
+      const t0 = Date.now();
+      const reply = await deps.sendChat(message);
+      const duration = Date.now() - t0;
+      deps.broadcastSSE({ type: 'chat', input: message.slice(0, 100), output: reply.slice(0, 200), duration });
+      sendJson(ctx.res, { reply, duration });
+    } catch (err: any) {
+      sendError(ctx.res, err.message, 500);
+    }
+  });
+
+  router.post('/api/chat/stream', async (ctx) => {
+    if (!deps.agentReady) {
+      sendError(ctx.res, 'Agent 正在初始化', 503);
+      return;
+    }
+    if (deps.streamChatInProgress.value) {
+      ctx.res.writeHead(429, {
+        'Content-Type': 'application/json',
+        'Retry-After': '10',
+      });
+      ctx.res.end(JSON.stringify({ error: '已有流式聊天正在进行，请稍后再试', retryAfter: 10 }));
+      return;
+    }
+    try {
+      const { message } = ctx.body || {};
+      if (!message || typeof message !== 'string') {
+        sendError(ctx.res, '缺少 message 字段', 400);
+        return;
+      }
+      // 设置 SSE 头
+      ctx.res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+      ctx.res.write('data: {"type":"start"}\n\n');
+
+      deps.streamChatInProgress.value = true;
+      const t0 = Date.now();
+
+      const writers: StreamWriters = {
+        onChunk: (chunk: string) => {
+          try { ctx.res.write(`data: ${JSON.stringify({ type: 'chunk', content: chunk })}\n\n`); } catch { /* closed */ }
+        },
+        onDone: (data) => {
+          try {
+            ctx.res.write(`data: ${JSON.stringify({ type: 'done', fullReply: data.fullReply, duration: data.durationMs })}\n\n`);
+            ctx.res.end();
+          } catch { /* closed */ }
+        },
+        onError: (error) => {
+          try {
+            ctx.res.write(`data: ${JSON.stringify({ type: 'error', error })}\n\n`);
+            ctx.res.end();
+          } catch { /* closed */ }
+        },
+        onClose: () => {
+          deps.streamChatInProgress.value = false;
+        },
+      };
+
+      ctx.req.on('close', () => {
+        deps.streamChatInProgress.value = false;
+        writers.onClose();
+      });
+
+      const fullReply = await deps.sendChatStream(message, writers);
+      const duration = Date.now() - t0;
+      deps.broadcastSSE({ type: 'chat', input: message.slice(0, 100), output: fullReply.slice(0, 200), duration });
+      if (!ctx.res.writableEnded) {
+        ctx.res.write(`data: ${JSON.stringify({ type: 'done', fullReply, duration })}\n\n`);
+        ctx.res.end();
+      }
+    } catch (err: any) {
+      deps.streamChatInProgress.value = false;
+      if (!ctx.res.writableEnded) {
+        ctx.res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+        ctx.res.end();
+      }
+    }
+  });
+
+  // ═══════════════════════════════════════════════════
+  // File Upload
+  // ═══════════════════════════════════════════════════
+
+  router.post('/api/upload', async (ctx) => {
+    try {
+      const contentType = ctx.req.headers['content-type'] || '';
+      if (!contentType.includes('multipart/form-data')) {
+        sendError(ctx.res, '需要 multipart/form-data', 400);
+        return;
+      }
+      // 重新读取原始 body（multipart 不走 JSON 解析）
+      const rawBody = Buffer.from(ctx.rawBody, 'utf8');
+      const result = await deps.saveUpload(rawBody, contentType);
+      sendJson(ctx.res, result);
     } catch (err: any) {
       sendError(ctx.res, err.message, 500);
     }
