@@ -213,65 +213,65 @@ td.detail { max-width: 280px; white-space: normal; word-break: break-all; font-s
 </head>
 <body>
 
-<h1>🛡️ Agent 审计仪表盘 <span class="live" id="liveDot" title="实时连接"></span></h1>
-<p class="subtitle">v2 · 决策追溯 · 时间线 · 实时推送 · 趋势分析 <span id="updateTime" style="font-size:10px;color:var(--text-muted)"></span></p>
+<h1 id="dashboardTitle" title="dashboardTitle">🛡️ Agent 审计仪表盘 <span class="live" id="liveDot" title="liveDot"></span></h1>
+<p class="subtitle" id="subtitle" title="subtitle">v2 · 决策追溯 · 时间线 · 实时推送 · 趋势分析 <span id="updateTime" title="updateTime" style="font-size:10px;color:var(--text-muted)"></span></p>
 
-<div class="stats" id="stats"><div class="stat-card" style="grid-column:1/-1"><div class="num"><div class="skeleton skeleton-line" style="width:60px;margin:0 auto"></div></div><div class="label">加载中...</div></div></div>
+<div class="stats" id="stats" title="stats"><div class="stat-card" style="grid-column:1/-1"><div class="num"><div class="skeleton skeleton-line" style="width:60px;margin:0 auto"></div></div><div class="label">加载中...</div></div></div>
 
 <div class="charts">
-  <div class="chart-box">
+  <div class="chart-box" id="pieChartBox" title="pieChartBox">
     <h3>📊 事件分类分布</h3>
     <div style="display:flex;align-items:center;gap:16px;">
-      <svg id="pieChart" viewBox="0 0 160 160" width="160" height="160"></svg>
-      <div class="pie-legend" id="pieLegend"></div>
+      <svg id="pieChart" title="pieChart" viewBox="0 0 160 160" width="160" height="160"></svg>
+      <div class="pie-legend" id="pieLegend" title="pieLegend"></div>
     </div>
   </div>
-  <div class="chart-box">
+  <div class="chart-box" id="trendChartBox" title="trendChartBox">
     <h3>📈 成功率趋势 (24h)</h3>
-    <svg class="trend-svg" id="trendChart" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
+    <svg class="trend-svg" id="trendChart" title="trendChart" viewBox="0 0 400 120" preserveAspectRatio="none"></svg>
   </div>
 </div>
 
-<div class="tabs">
-  <button class="tab active" data-panel="timeline">⏱ 时间线</button>
-  <button class="tab" data-panel="table">📋 表格</button>
+<div class="tabs" id="tabsNav" title="tabsNav">
+  <button class="tab active" id="timelineTab" title="timelineTab" data-panel="timeline">⏱ 时间线</button>
+  <button class="tab" id="tableTab" title="tableTab" data-panel="table">📋 表格</button>
 </div>
 
-<div class="panel active" id="timeline">
+<div class="panel active" id="timeline" title="timeline">
   <div class="controls">
-    <select id="tlCatFilter">
+    <select id="tlCatFilter" title="tlCatFilter">
       <option value="all">全部类型</option>
       <option value="session">会话</option><option value="tool_call">工具调用</option>
       <option value="decision">决策</option><option value="model_switch">模型切换</option>
       <option value="recovery">恢复</option><option value="degradation">降级</option>
       <option value="checkpoint">检查点</option><option value="error">错误</option>
     </select>
-    <input type="text" id="tlSearch" placeholder="搜索事件...">
-    <span id="tlCount" style="font-size:10px;color:var(--text-muted)"></span>
+    <input type="text" id="tlSearch" title="tlSearch" placeholder="搜索事件...">
+    <span id="tlCount" title="tlCount" style="font-size:10px;color:var(--text-muted)"></span>
   </div>
-  <div class="timeline" id="timelineContent"><div class="empty-state"><div class="icon">⏳</div>加载中...</div></div>
+  <div class="timeline" id="timelineContent" title="timelineContent"><div class="empty-state"><div class="icon">⏳</div>加载中...</div></div>
 </div>
 
-<div class="panel" id="table">
+<div class="panel" id="table" title="table">
   <div class="controls">
-    <select id="tbCatFilter">
+    <select id="tbCatFilter" title="tbCatFilter">
       <option value="all">全部类型</option>
       <option value="session">会话</option><option value="tool_call">工具调用</option>
       <option value="decision">决策</option><option value="model_switch">模型切换</option>
       <option value="recovery">恢复</option><option value="degradation">降级</option>
       <option value="checkpoint">检查点</option><option value="error">错误</option>
     </select>
-    <select id="tbResultFilter">
+    <select id="tbResultFilter" title="tbResultFilter">
       <option value="all">全部结果</option>
       <option value="success">成功</option><option value="failure">失败</option><option value="degraded">降级</option><option value="recovered">已恢复</option>
     </select>
-    <input type="text" id="tbSearch" placeholder="搜索...">
+    <input type="text" id="tbSearch" title="tbSearch" placeholder="搜索...">
   </div>
-  <div class="table-wrap"><table><thead><tr><th>时间</th><th>类型</th><th>动作</th><th>结果</th><th>耗时</th><th class="detail">详情</th></tr></thead><tbody id="tbBody"><tr><td colspan="6" class="empty-state">⏳ 加载中...</td></tr></tbody></table></div>
+  <div class="table-wrap" id="tableWrap" title="tableWrap"><table><thead><tr><th>时间</th><th>类型</th><th>动作</th><th>结果</th><th>耗时</th><th class="detail">详情</th></tr></thead><tbody id="tbBody" title="tbBody"><tr><td colspan="6" class="empty-state">⏳ 加载中...</td></tr></tbody></table></div>
 </div>
 
-<div id="errorArea"></div>
-<div style="text-align:right;margin-top:8px;font-size:10px;color:var(--text-muted);" id="statusHint"></div>
+<div id="errorArea" title="errorArea"></div>
+<div style="text-align:right;margin-top:8px;font-size:10px;color:var(--text-muted);" id="statusHint" title="statusHint"></div>
 
 <script>
 // ═══════════════════════════════════

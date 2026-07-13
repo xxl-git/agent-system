@@ -120,9 +120,9 @@ async function ensureAgent(): Promise<AgentCore> {
     // 初始化会话存储
     await sessionStore.init(path.resolve(__dirname, '..', '..', 'data'));
     const initMsg = await agent.init();
-    if (initMsg) console.log('[AgentServer] ' + initMsg.replace(/\n/g, ' '));
+    if (initMsg) logger.info('[AgentServer] ' + initMsg.replace(/\n/g, ' '));
     agentReady = true;
-    console.log('[AgentServer] Agent 就绪');
+    logger.info('[AgentServer] Agent 就绪');
     broadcastSSE({ type: 'ready' });
     // 监听 Agent 事件总线，转发为 SSE
     agentEventBus.on('status', (data) => {
@@ -652,17 +652,17 @@ function parseMultipart(buffer: Buffer, boundary: string): { filename: string; d
 // 先加载配置（必须在 listen 之前执行，否则 getConfig() 会因竞态抛出「未加载」）
 initConfig();
 
-console.log(`[Startup] 准备监听端口 ${PORT}...`);
+logger.info(`[Startup] 准备监听端口 ${PORT}...`);
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`[Startup] ✓ 端口 ${PORT} 监听成功`);
-  console.log(`Agent HTTP Server: http://127.0.0.1:${PORT}`);
+  logger.info(`[Startup] ✓ 端口 ${PORT} 监听成功`);
+  logger.info(`Agent HTTP Server: http://127.0.0.1:${PORT}`);
   startSseHeartbeat();
-  ensureAgent().catch(err => console.error('[AgentServer] 初始化失败:', err.message));
+  ensureAgent().catch(err => logger.error('[AgentServer] 初始化失败:', err.message));
 });
 
 server.on('error', (err) => {
-  console.error(`[Startup] ✗ 监听失败:`, err);
+  logger.error(`[Startup] ✗ 监听失败:`, err);
 });
 
 // ─── 优雅关闭 ───
@@ -670,19 +670,19 @@ let shuttingDown = false;
 function gracefulShutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`[Shutdown] 收到 ${signal}，开始优雅关闭...`);
+  logger.info(`[Shutdown] 收到 ${signal}，开始优雅关闭...`);
 
   // 1. 停止接受新连接
   server.close(() => {
-    console.log('[Shutdown] ✓ HTTP 服务器已关闭');
+    logger.info('[Shutdown] ✓ HTTP 服务器已关闭');
   });
 
   // 2. 停止 Agent（保存会话/审计/摘要）
   try {
     agent?.stop();
-    console.log('[Shutdown] ✓ Agent 已停止');
+    logger.info('[Shutdown] ✓ Agent 已停止');
   } catch (err: any) {
-    console.error('[Shutdown] Agent 停止失败:', err?.message);
+    logger.error('[Shutdown] Agent 停止失败:', err?.message);
   }
 
   // 3. 关闭所有 SSE 客户端连接
@@ -694,7 +694,7 @@ function gracefulShutdown(signal: string) {
 
   // 4. 等待 1 秒让清理完成，然后强制退出
   setTimeout(() => {
-    console.log('[Shutdown] 完成，退出进程');
+    logger.info('[Shutdown] 完成，退出进程');
     process.exit(0);
   }, 1000);
 }
@@ -704,13 +704,11 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 // ─── 全局未捕获异常兜底（防止进程崩溃） ───
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('[UnhandledRejection]', reason);
-  logger?.error?.('[UnhandledRejection]', reason);
+  logger.error('[UnhandledRejection]', reason);
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('[UncaughtException]', err);
-  logger?.error?.('[UncaughtException]', err);
+  logger.error('[UncaughtException]', err);
   // 不立即退出，记录后继续运行（避免单次错误导致服务中断）
   // 但如果是致命错误（如 EADDRINUSE），仍会触发 gracefulShutdown
 });

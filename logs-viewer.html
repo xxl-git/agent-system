@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -52,22 +52,22 @@ header h1 { font-size: 16px; font-weight: 600; background: linear-gradient(135de
 </style>
 </head>
 <body>
-<header>
-  <a href="/agent-ui.html" class="back-btn">← 返回控制台</a>
-  <h1>📄 日志查看器</h1>
+<header id="pageHeader" title="pageHeader">
+  <a href="/agent-ui.html" class="back-btn" id="backBtn" title="backBtn">← 返回控制台</a>
+  <h1 id="pageTitle" title="pageTitle">📄 日志查看器</h1>
 </header>
 
-<div class="controls">
-  <label for="dateSelect">选择日期：</label>
-  <select id="dateSelect" onchange="loadLog()">
+<div class="controls" id="controlsBar" title="controlsBar">
+  <label for="dateSelect" id="dateLabel" title="dateLabel">选择日期：</label>
+  <select id="dateSelect" title="dateSelect" onchange="loadLog()">
     <option value="">加载中...</option>
   </select>
-  <button class="refresh-btn" onclick="loadLogsList()">🔄 刷新列表</button>
-  <button class="refresh-btn" onclick="autoScroll=!autoScroll; this.textContent=autoScroll?'⏸ 暂停滚动':'⏵ 自动滚动';">⏵ 自动滚动</button>
+  <button class="refresh-btn" id="refreshBtn" title="refreshBtn" onclick="loadLogsList()">🔄 刷新列表</button>
+  <button class="refresh-btn" id="autoScrollBtn" title="autoScrollBtn" onclick="autoScroll=!autoScroll; this.textContent=autoScroll?'⏸ 暂停滚动':'⏵ 自动滚动';">⏵ 自动滚动</button>
 </div>
 
-<div class="log-container" id="logContainer">
-  <div class="loading">请选择日期加载日志...</div>
+<div class="log-container" id="logContainer" title="logContainer">
+  <div class="loading" id="loadingIndicator" title="loadingIndicator">请选择日期加载日志...</div>
 </div>
 
 <script>

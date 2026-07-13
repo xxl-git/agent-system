@@ -1,5 +1,4 @@
-﻿// @ts-nocheck
-// Agent 核心循环 — Phase 5 升级版
+﻿// Agent 核心循环 — Phase 5 升级版
 // 集成: 意图解析 + 任务编排 + 工具 + 记忆 + 项目 + 智能路由 + 磨合 + 技能生态 + 多Agent + 韧性保障
 import { agentEventBus } from '@agent-system/events';
 import * as lmstudio_1 from '../../models/adapters/lmstudio';

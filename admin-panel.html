@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -460,72 +460,72 @@ body::before {
 </head>
 <body>
 <!-- ═══ Sidebar ═══ -->
-<nav class="sidebar" id="sidebar">
-  <div class="sidebar-logo" onclick="switchTab('dashboard')">⚡</div>
-  <div class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
-    <span class="nav-icon">📊</span>
-    <span class="nav-label">控制台</span>
+<nav class="sidebar" id="sidebar" title="sidebar">
+  <div class="sidebar-logo" id="sidebarLogo" title="sidebarLogo" onclick="switchTab('dashboard')">⚡</div>
+  <div class="nav-item active" id="navDashboard" title="navDashboard" data-tab="dashboard" onclick="switchTab('dashboard')">
+    <span class="nav-icon" id="navDashboardIcon" title="navDashboardIcon">📊</span>
+    <span class="nav-label" id="navDashboardLabel" title="navDashboardLabel">控制台</span>
   </div>
-  <div class="nav-item" data-tab="chat" onclick="switchTab('chat')">
-    <span class="nav-icon">💬</span>
-    <span class="nav-label">对话</span>
+  <div class="nav-item" id="navChat" title="navChat" data-tab="chat" onclick="switchTab('chat')">
+    <span class="nav-icon" id="navChatIcon" title="navChatIcon">💬</span>
+    <span class="nav-label" id="navChatLabel" title="navChatLabel">对话</span>
   </div>
-  <div class="nav-item" data-tab="audit" onclick="switchTab('audit')">
-    <span class="nav-icon">📋</span>
-    <span class="nav-label">审计</span>
+  <div class="nav-item" id="navAudit" title="navAudit" data-tab="audit" onclick="switchTab('audit')">
+    <span class="nav-icon" id="navAuditIcon" title="navAuditIcon">📋</span>
+    <span class="nav-label" id="navAuditLabel" title="navAuditLabel">审计</span>
   </div>
 </nav>
 
 <!-- ═══ Main Content ═══ -->
-<main class="main-content" id="mainContent">
+<main class="main-content" id="mainContent" title="mainContent">
   <!-- Dashboard Tab -->
-  <div class="tab-content active" id="tab-dashboard">
-    <div class="container">
+  <div class="tab-content active" id="tab-dashboard" title="tabDashboard">
+    <div class="container" id="dashboardContainer" title="dashboardContainer">
       <!-- Header -->
-      <div class="header">
-        <div class="header-left">
-          <div class="header-logo">⚡</div>
-          <h1>Agent System <span class="accent">管理控制台</span></h1>
+      <div class="header" id="pageHeader" title="pageHeader">
+        <div class="header-left" id="headerLeft" title="headerLeft">
+          <div class="header-logo" id="headerLogo" title="headerLogo">⚡</div>
+          <h1 id="pageTitle" title="pageTitle">Agent System <span class="accent" id="pageTitleAccent" title="pageTitleAccent">管理控制台</span></h1>
         </div>
-        <div class="header-right">
-          <span class="version-badge" id="versionBadge">v0.6.0</span>
-          <span class="version-badge" id="debugBadge" style="display:none;background:var(--orange)">🔍 详细日志</span>
-          <div class="connect-indicator" id="connection">
-            <span class="connect-dot" id="statusDot"></span>
-            <span id="statusLabel">连接中...</span>
+        <div class="header-right" id="headerRight" title="headerRight">
+          <span class="version-badge" id="versionBadge" title="versionBadge">v0.6.0</span>
+          <span class="version-badge" id="debugBadge" title="debugBadge" style="display:none;background:var(--orange)">🔍 详细日志</span>
+          <div class="connect-indicator" id="connection" title="connection">
+            <span class="connect-dot" id="statusDot" title="statusDot"></span>
+            <span id="statusLabel" title="statusLabel">连接中...</span>
           </div>
-          <span class="status-text" id="uptimeText" style="font-size:11px;color:var(--text-dim)">--</span>
+          <span class="status-text" id="uptimeText" title="uptimeText" style="font-size:11px;color:var(--text-dim)">--</span>
         </div>
       </div>
 
       <!-- Stats Row -->
-      <div class="stats-row" id="statsRow">
-        <div class="loading-center" style="grid-column:1/-1">
-          <div class="spinner-ring"></div>
-          <p>加载仪表盘数据...</p>
+      <div class="stats-row" id="statsRow" title="statsRow">
+        <div class="loading-center" id="statsLoading" title="statsLoading" style="grid-column:1/-1">
+          <div class="spinner-ring" id="statsSpinner" title="statsSpinner"></div>
+          <p id="statsLoadingText" title="statsLoadingText">加载仪表盘数据...</p>
         </div>
       </div>
 
       <!-- Main Grid -->
-      <div class="grid" id="mainGrid">
-        <div class="loading-center" style="grid-column:1/-1">
-          <div class="spinner-ring"></div>
-          <p>正在初始化...</p>
+      <div class="grid" id="mainGrid" title="mainGrid">
+        <div class="loading-center" id="gridLoading" title="gridLoading" style="grid-column:1/-1">
+          <div class="spinner-ring" id="gridSpinner" title="gridSpinner"></div>
+          <p id="gridLoadingText" title="gridLoadingText">正在初始化...</p>
         </div>
       </div>
 
-      <div class="footer-bar">Agent System &middot; Auto-refresh every 5s &middot; <span id="lastUpdateTime">--</span></div>
+      <div class="footer-bar" id="footerBar" title="footerBar">Agent System &middot; Auto-refresh every 5s &middot; <span id="lastUpdateTime" title="lastUpdateTime">--</span></div>
     </div>
   </div>
 
   <!-- Chat Tab (lazy-load on first click) -->
-  <div class="tab-content" id="tab-chat">
-    <iframe class="tab-iframe" id="chatFrame" title="对话界面"></iframe>
+  <div class="tab-content" id="tab-chat" title="tabChat">
+    <iframe class="tab-iframe" id="chatFrame" title="chatFrame"></iframe>
   </div>
 
   <!-- Audit Tab (lazy-load on first click) -->
-  <div class="tab-content" id="tab-audit">
-    <iframe class="tab-iframe" id="auditFrame" title="审计日志"></iframe>
+  <div class="tab-content" id="tab-audit" title="tabAudit">
+    <iframe class="tab-iframe" id="auditFrame" title="auditFrame"></iframe>
   </div>
 </main>
 
@@ -602,10 +602,10 @@ function renderStats(data) {
   ];
   
   document.getElementById('statsRow').innerHTML = stats.map((s, i) =>
-    `<div class="stat-card">
-      <div class="stat-icon">${s.icon}</div>
-      <div class="stat-value" id="stat-${i}">${typeof s.value === 'number' ? '0' : s.value}</div>
-      <div class="stat-label">${s.label}</div>
+    `<div class="stat-card" id="statCard${i}" title="statCard${i}">
+      <div class="stat-icon" id="statIcon${i}" title="statIcon${i}">${s.icon}</div>
+      <div class="stat-value" id="stat-${i}" title="stat-${i}">${typeof s.value === 'number' ? '0' : s.value}</div>
+      <div class="stat-label" id="statLabel${i}" title="statLabel${i}">${s.label}</div>
     </div>`
   ).join('');
   document.getElementById('statsRow').dataset.rendered = '1';
@@ -622,7 +622,7 @@ function renderStats(data) {
 function renderProjects(data) {
   const proj = data.projects || {};
   const projects = proj.projects || [];
-  if (!projects.length) return `<div class="empty"><div class="empty-icon">📁</div><div class="empty-text">暂无项目</div></div>`;
+  if (!projects.length) return `<div class="empty" id="projectsEmpty" title="projectsEmpty"><div class="empty-icon" id="projectsEmptyIcon" title="projectsEmptyIcon">📁</div><div class="empty-text" id="projectsEmptyText" title="projectsEmptyText">暂无项目</div></div>`;
   return projects.map(p => {
     const cls = p.progress >= 80 ? 'high' : p.progress >= 40 ? 'mid' : 'low';
     return `<div class="project-item">
@@ -646,7 +646,7 @@ function renderProjects(data) {
 function renderSkills(data) {
   const skills = data.skills || {};
   const list = skills.registered || [];
-  if (!list.length) return `<div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">暂无已安装技能</div></div>`;
+  if (!list.length) return `<div class="empty" id="skillsEmpty" title="skillsEmpty"><div class="empty-icon" id="skillsEmptyIcon" title="skillsEmptyIcon">🔧</div><div class="empty-text" id="skillsEmptyText" title="skillsEmptyText">暂无已安装技能</div></div>`;
   return list.slice(0, 10).map(s =>
     `<div class="skill-item">
       <span class="skill-name">${s.name}</span>
@@ -732,7 +732,7 @@ function renderModels(data) {
             </div>
           `).join('')}
         </div>
-      ` : `<div class="empty"><div class="empty-icon">🤖</div><div class="empty-text">暂无模型数据</div></div>`}
+      ` : `<div class="empty" id="modelsEmpty" title="modelsEmpty"><div class="empty-icon" id="modelsEmptyIcon" title="modelsEmptyIcon">🤖</div><div class="empty-text" id="modelsEmptyText" title="modelsEmptyText">暂无模型数据</div></div>`}
     </div>
   `;
 }
@@ -767,7 +767,7 @@ function renderHealth(data) {
 function renderEvents(data) {
   const audit = data.audit || {};
   const events = audit.recentEvents || [];
-  if (!events.length) return `<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">暂无事件记录</div></div>`;
+  if (!events.length) return `<div class="empty" id="auditEmpty" title="auditEmpty"><div class="empty-icon" id="auditEmptyIcon" title="auditEmptyIcon">📋</div><div class="empty-text" id="auditEmptyText" title="auditEmptyText">暂无事件记录</div></div>`;
   return `<div class="event-list">${events.slice(-15).map(e => {
     const cls = e.result === 'success' ? 'success' : e.result === 'error' ? 'error' : 'info';
     return `<div class="event-item">
@@ -789,7 +789,7 @@ function renderMemory(data) {
 
 function renderContext(data) {
   const ctx = data.context || {};
-  if (ctx.error || !ctx.enabled) return `<div class="empty"><div class="empty-icon">🧠</div><div class="empty-text">上下文管理未启用</div></div>`;
+  if (ctx.error || !ctx.enabled) return `<div class="empty" id="contextEmpty" title="contextEmpty"><div class="empty-icon" id="contextEmptyIcon" title="contextEmptyIcon">🧠</div><div class="empty-text" id="contextEmptyText" title="contextEmptyText">上下文管理未启用</div></div>`;
   const levels = {0:'无压缩',1:'低',2:'中',3:'高',4:'极限'};
   const lv = ctx.compressionLevel || 0;
   const reset = ctx.sessionReset ? '<span style="color:var(--yellow)">⚠ 待开启新会话</span>' : '正常续聊';
@@ -827,13 +827,13 @@ const CARD_DEFS = [
 
 function initGrid() {
   document.getElementById('mainGrid').innerHTML = CARD_DEFS.map(c =>
-    `<div class="card glass ${c.fullCard ? 'card-full' : ''}" id="card-${c.id}">
-      <div class="card-header"><h2>${c.title}</h2><span class="badge" id="badge-${c.id}">${c.badge}</span></div>
-      <div class="card-body" id="body-${c.id}">
-        <div class="skeleton loading-state">
-          <div class="skeleton-line"></div>
-          <div class="skeleton-line"></div>
-          <div class="skeleton-line"></div>
+    `<div class="card glass ${c.fullCard ? 'card-full' : ''}" id="card-${c.id}" title="card-${c.id}">
+      <div class="card-header" id="cardHeader-${c.id}" title="cardHeader-${c.id}"><h2 id="cardTitle-${c.id}" title="cardTitle-${c.id}">${c.title}</h2><span class="badge" id="badge-${c.id}" title="badge-${c.id}">${c.badge}</span></div>
+      <div class="card-body" id="body-${c.id}" title="body-${c.id}">
+        <div class="skeleton loading-state" id="skeleton-${c.id}" title="skeleton-${c.id}">
+          <div class="skeleton-line" id="skeletonLine1-${c.id}" title="skeletonLine1-${c.id}"></div>
+          <div class="skeleton-line" id="skeletonLine2-${c.id}" title="skeletonLine2-${c.id}"></div>
+          <div class="skeleton-line" id="skeletonLine3-${c.id}" title="skeletonLine3-${c.id}"></div>
         </div>
       </div>
     </div>`
@@ -947,44 +947,44 @@ function renderSettings() {
   const debugOn = a.debugLogging === true;
 
   safeUpdate('body-settings', `
-<div class="settings-section">
+<div class="settings-section" id="settingsSection" title="settingsSection">
 
   <!-- ─── 🤖 模型配置 ─── -->
-  <div class="setting-card">
-    <div class="setting-card-header">
-      <span class="icon">🤖</span><h3>模型配置</h3>
-      <span class="badge">${modelOpts.split('selected').length-1} 选</span>
+  <div class="setting-card" id="settingCardModel" title="settingCardModel">
+    <div class="setting-card-header" id="settingHeaderModel" title="settingHeaderModel">
+      <span class="icon" id="settingIconModel" title="settingIconModel">🤖</span><h3 id="settingTitleModel" title="settingTitleModel">模型配置</h3>
+      <span class="badge" id="settingBadgeModel" title="settingBadgeModel">${modelOpts.split('selected').length-1} 选</span>
     </div>
     ${fld('cfgModel','当前模型','',`<select id="cfgModel" style="width:160px;flex:0 0 160px;text-align:left;padding:5px 8px;background:rgba(0,0,0,0.3);color:var(--text);border:1px solid rgba(255,255,255,0.06);border-radius:6px;font-size:11px">${modelOpts}</select>`)}
     ${fld('cfgMdlTokens','响应Token上限','每个请求的最大输出token', slider('cfgMdlTokens', m.maxTokens||512, 64, 4096, 64))}
     ${fld('cfgMdlTimeout','模型超时','LM Studio 请求超时(ms)', slider('cfgMdlTimeout', m.timeoutMs||120000, 5000, 300000, 5000))}
     ${fld('','服务地址','只读','<span class="readonly-text">'+ (m.baseUrl||'http://127.0.0.1:1234/v1') +'</span>')}
-    <div class="setting-actions">
-      <button class="save-btn small" onclick="saveCategory('model')">💾 保存模型配置</button>
-      <span class="save-msg" id="saveMsgModel"></span>
+    <div class="setting-actions" id="settingActionsModel" title="settingActionsModel">
+      <button class="save-btn small" id="saveBtnModel" title="saveBtnModel" onclick="saveCategory('model')">💾 保存模型配置</button>
+      <span class="save-msg" id="saveMsgModel" title="saveMsgModel"></span>
     </div>
   </div>
 
   <!-- ─── ⚡ 智能适配器 ─── -->
-  <div class="setting-card">
-    <div class="setting-card-header">
-      <span class="icon">⚡</span><h3>智能适配器</h3>
-      <span class="badge">Agent↔模型</span>
+  <div class="setting-card" id="settingCardAdapter" title="settingCardAdapter">
+    <div class="setting-card-header" id="settingHeaderAdapter" title="settingHeaderAdapter">
+      <span class="icon" id="settingIconAdapter" title="settingIconAdapter">⚡</span><h3 id="settingTitleAdapter" title="settingTitleAdapter">智能适配器</h3>
+      <span class="badge" id="settingBadgeAdapter" title="settingBadgeAdapter">Agent↔模型</span>
     </div>
     ${fld('cfgCallTimeout','调用超时','SmartAdapter 单次调用等待(ms)', slider('cfgCallTimeout', a.callTimeoutMs||120000, 5000, 300000, 5000))}
     ${fld('cfgMaxRetries','最大重试','适配器重试次数', sel('cfgMaxRetries', a.maxRetries??1, [0,1,2,3,4,5].map(n=>({v:n,l:n+'次'}))))}
     ${fld('cfgEmptyThresh','空响应阈值','触发降级前的连续空次数', sel('cfgEmptyThresh', a.emptyLoopThreshold||3, [2,3,4,5,10].map(n=>({v:n,l:n+'次'}))))}
-    <div class="setting-actions">
-      <button class="save-btn small" onclick="saveCategory('adapter')">💾 保存适配器配置</button>
-      <span class="save-msg" id="saveMsgAdapter"></span>
+    <div class="setting-actions" id="settingActionsAdapter" title="settingActionsAdapter">
+      <button class="save-btn small" id="saveBtnAdapter" title="saveBtnAdapter" onclick="saveCategory('adapter')">💾 保存适配器配置</button>
+      <span class="save-msg" id="saveMsgAdapter" title="saveMsgAdapter"></span>
     </div>
   </div>
 
   <!-- ─── 🧠 上下文管理 ─── -->
-  <div class="setting-card">
-    <div class="setting-card-header">
-      <span class="icon">🧠</span><h3>上下文管理</h3>
-      <span class="badge">无上限上下文</span>
+  <div class="setting-card" id="settingCardContext" title="settingCardContext">
+    <div class="setting-card-header" id="settingHeaderContext" title="settingHeaderContext">
+      <span class="icon" id="settingIconContext" title="settingIconContext">🧠</span><h3 id="settingTitleContext" title="settingTitleContext">上下文管理</h3>
+      <span class="badge" id="settingBadgeContext" title="settingBadgeContext">无上限上下文</span>
     </div>
     ${fld('cfgCtxTokens','Token预算','单次上下文总token上限', slider('cfgCtxTokens', c.maxTokens||4000, 512, 16384, 512))}
     ${fld('cfgHotWin','热窗口','最近 N 条消息保留完整', sel('cfgHotWin', c.hotWindowSize||12, [4,6,8,10,12,16,20,24].map(n=>({v:n,l:n+'条'}))))}
@@ -993,40 +993,40 @@ function renderSettings() {
     ${fld('cfgCtxTool','保留工具结果','','<label style="display:flex;align-items:center;gap:6px;cursor:pointer">'+tog('cfgCtxTool',c.preserveToolResults!==false,'')+'<span style="font-size:10px;color:var(--text-dim)">'+ (c.preserveToolResults!==false?'已启用':'已禁用') +'</span></label>')}
     ${fld('cfgCtxSys','保留系统提示','','<label style="display:flex;align-items:center;gap:6px;cursor:pointer">'+tog('cfgCtxSys',c.preserveSystem!==false,'')+'<span style="font-size:10px;color:var(--text-dim)">'+ (c.preserveSystem!==false?'已启用':'已禁用') +'</span></label>')}
     ${fld('cfgAttn','注意力评分','TF-IDF+位置+角色评分','<label style="display:flex;align-items:center;gap:6px;cursor:pointer">'+tog('cfgAttn',c.attentionEnabled!==false,'')+'<span style="font-size:10px;color:var(--text-dim)">'+ (c.attentionEnabled!==false?'已启用':'已禁用') +'</span></label>')}
-    <div class="setting-actions">
-      <button class="save-btn small" onclick="saveCategory('context')">💾 保存上下文配置</button>
-      <span class="save-msg" id="saveMsgContext"></span>
+    <div class="setting-actions" id="settingActionsContext" title="settingActionsContext">
+      <button class="save-btn small" id="saveBtnContext" title="saveBtnContext" onclick="saveCategory('context')">💾 保存上下文配置</button>
+      <span class="save-msg" id="saveMsgContext" title="saveMsgContext"></span>
     </div>
   </div>
 
   <!-- ─── 🕐 调度与心跳 ─── -->
-  <div class="setting-card">
-    <div class="setting-card-header">
-      <span class="icon">🕐</span><h3>调度与心跳</h3>
-      <span class="badge">Agent 任务调度</span>
+  <div class="setting-card" id="settingCardScheduler" title="settingCardScheduler">
+    <div class="setting-card-header" id="settingHeaderScheduler" title="settingHeaderScheduler">
+      <span class="icon" id="settingIconScheduler" title="settingIconScheduler">🕐</span><h3 id="settingTitleScheduler" title="settingTitleScheduler">调度与心跳</h3>
+      <span class="badge" id="settingBadgeScheduler" title="settingBadgeScheduler">Agent 任务调度</span>
     </div>
     ${fld('cfgHrbeat','心跳间隔','', sel('cfgHrbeat', a.heartbeatIntervalMs||300000, [{v:60000,l:'1 分钟'},{v:120000,l:'2 分钟'},{v:300000,l:'5 分钟'},{v:600000,l:'10 分钟'}]))}
     ${fld('cfgLoop','循环间隔','主循环间隔(ms)', sel('cfgLoop', a.loopIntervalMs||1000, [{v:500,l:'500ms'},{v:1000,l:'1s'},{v:2000,l:'2s'},{v:5000,l:'5s'}]))}
     ${fld('cfgSubTasks','最大子任务','', sel('cfgSubTasks', a.maxSubTasks||10, [1,2,5,10,20,50].map(n=>({v:n,l:n+'个'}))))}
     ${fld('cfgDefTimeout','总超时','单次对话总超时(ms)', sel('cfgDefTimeout', a.defaultTimeoutMs||600000, [{v:120000,l:'2 分钟'},{v:300000,l:'5 分钟'},{v:600000,l:'10 分钟'},{v:1200000,l:'20 分钟'}]))}
-    <div class="setting-actions">
-      <button class="save-btn small" onclick="saveCategory('scheduler')">💾 保存调度配置</button>
-      <span class="save-msg" id="saveMsgScheduler"></span>
+    <div class="setting-actions" id="settingActionsScheduler" title="settingActionsScheduler">
+      <button class="save-btn small" id="saveBtnScheduler" title="saveBtnScheduler" onclick="saveCategory('scheduler')">💾 保存调度配置</button>
+      <span class="save-msg" id="saveMsgScheduler" title="saveMsgScheduler"></span>
     </div>
   </div>
 
   <!-- ─── 📝 日志与调试 ─── -->
-  <div class="setting-card">
-    <div class="setting-card-header">
-      <span class="icon">📝</span><h3>日志与调试</h3>
-      <span class="badge">即时生效</span>
+  <div class="setting-card" id="settingCardLogging" title="settingCardLogging">
+    <div class="setting-card-header" id="settingHeaderLogging" title="settingHeaderLogging">
+      <span class="icon" id="settingIconLogging" title="settingIconLogging">📝</span><h3 id="settingTitleLogging" title="settingTitleLogging">日志与调试</h3>
+      <span class="badge" id="settingBadgeLogging" title="settingBadgeLogging">即时生效</span>
     </div>
     ${fld('cfgDebug','详细日志','记录Agent↔模型通信','<label style="display:flex;align-items:center;gap:6px;cursor:pointer">'+tog('cfgDebug',debugOn,'toggleDebugLog()')+'<span style="font-size:10px;color:var(--text-dim)">'+ (debugOn?'已开启':'已关闭') +'</span></label>')}
     ${fld('cfgLogLevel','日志级别','', sel('cfgLogLevel', l.level||'info', [{v:'debug',l:'Debug'},{v:'info',l:'Info'},{v:'warn',l:'Warning'},{v:'error',l:'Error'}]))}
     ${fld('','日志目录','只读','<span class="readonly-text">'+ (l.dir||'./logs') +'</span>')}
-    <div class="setting-actions">
-      <button class="save-btn small" onclick="saveCategory('logging')">💾 保存日志配置</button>
-      <span class="save-msg" id="saveMsgLogging"></span>
+    <div class="setting-actions" id="settingActionsLogging" title="settingActionsLogging">
+      <button class="save-btn small" id="saveBtnLogging" title="saveBtnLogging" onclick="saveCategory('logging')">💾 保存日志配置</button>
+      <span class="save-msg" id="saveMsgLogging" title="saveMsgLogging"></span>
     </div>
   </div>
 
@@ -1147,9 +1147,9 @@ async function loadDashboard() {
     updateConnection(false);
     if (!_prevData) {
       document.getElementById('mainGrid').innerHTML =
-        `<div class="card glass card-full" style="text-align:center;padding:40px 20px;color:var(--red)">
-          <div style="font-size:40px;margin-bottom:12px">🔌</div>
-          <p>API 连接失败: ${data.error}</p>
+        `<div class="card glass card-full" id="errorCard" title="errorCard" style="text-align:center;padding:40px 20px;color:var(--red)">
+          <div id="errorIcon" title="errorIcon" style="font-size:40px;margin-bottom:12px">🔌</div>
+          <p id="errorText" title="errorText">API 连接失败: ${data.error}</p>
         </div>`;
     }
     return;
@@ -1244,6 +1244,7 @@ function showToast(msg) {
   if (!t) {
     t = document.createElement('div');
     t.id = 'toastEl';
+    t.title = 'toastEl';
     t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:10px;padding:10px 20px;font-size:13px;color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,0.3);z-index:9999;transition:opacity .3s,transform .3s';
     document.body.appendChild(t);
   }

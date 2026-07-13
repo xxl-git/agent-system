@@ -1,12 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+packages/*/dist/
+*.tsbuildinfo
+
+# Logs
 logs/
 *.log
-node_modules/
-dist/
-.git
-.DS_Store
-data/
-*.tsbuildinfo
-packages/*/dist/
+
+# TypeScript declaration files (generated)
 *.d.ts
 *.d.ts.map
 *.js.map
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Uploads (user data)
+uploads/
+
+# Runtime data
+data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Misc
+.git

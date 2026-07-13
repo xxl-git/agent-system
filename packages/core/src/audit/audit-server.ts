@@ -152,7 +152,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`审计仪表盘 v2: http://127.0.0.1:${PORT}`);
+  console.log(`Audit dashboard v2: http://127.0.0.1:${PORT}`);
 });
 
 process.on('SIGINT', () => { server.close(); process.exit(0); });

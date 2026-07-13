@@ -997,194 +997,194 @@ code.inline {
 </head>
 <body>
 
-<header>
-  <span class="dot" id="statusDot"></span>
-  <h1>Agent System</h1>
-  <div class="model-badge local" id="modelBadge" onclick="toggleModelSelector(event)" title="点击切换模型">
-    <span class="provider-tag">本地</span>
-    <span class="model-status-dot" id="modelStatusDot"></span>
-    <span class="model-name" id="modelNameDisplay">加载中...</span>
-    <span style="font-size:8px;opacity:.5">▾</span>
+<header id="appHeader" title="appHeader">
+  <span class="dot" id="statusDot" title="statusDot"></span>
+  <h1 id="appTitle" title="appTitle">Agent System</h1>
+  <div class="model-badge local" id="modelBadge" onclick="toggleModelSelector(event)" title="modelBadge">
+    <span class="provider-tag" id="providerTag" title="providerTag">本地</span>
+    <span class="model-status-dot" id="modelStatusDot" title="modelStatusDot"></span>
+    <span class="model-name" id="modelNameDisplay" title="modelNameDisplay">加载中...</span>
+    <span id="modelBadgeArrow" title="modelBadgeArrow" style="font-size:8px;opacity:.5">▾</span>
   </div>
-  <nav>
-    <button class="nav-btn" onclick="toggleSessionSidebar()" title="会话列表">☰</button>
-    <button class="nav-btn" onclick="clearChat()" title="清空对话">🗑</button>
-    <button class="nav-btn" onclick="openSettings()" title="设置">⚙</button>
-    <a class="nav-btn" href="/logs-viewer.html" target="_blank" title="日志查看">📄 日志</a>
-    <a class="nav-btn" href="/admin" target="_blank">📊 管理</a>
-    <a class="nav-btn" href="http://127.0.0.1:19700" target="_blank">📈 仪表盘</a>
+  <nav id="headerNav" title="headerNav">
+    <button class="nav-btn" id="sessionListBtn" onclick="toggleSessionSidebar()" title="sessionListBtn">☰</button>
+    <button class="nav-btn" id="clearChatBtn" onclick="clearChat()" title="clearChatBtn">🗑</button>
+    <button class="nav-btn" id="settingsBtn" onclick="openSettings()" title="settingsBtn">⚙</button>
+    <a class="nav-btn" id="logsLink" href="/logs-viewer.html" target="_blank" title="logsLink">📄 日志</a>
+    <a class="nav-btn" id="adminLink" href="/admin" target="_blank" title="adminLink">📊 管理</a>
+    <a class="nav-btn" id="dashboardLink" href="http://127.0.0.1:19700" target="_blank" title="dashboardLink">📈 仪表盘</a>
   </nav>
 </header>
 
-<div class="status-bar">
-  <span class="stat-item" id="statusModelInfo">
-    <span class="label">模型:</span>
-    <span class="val" id="statusModelVal">-</span>
-    <span class="model-online-indicator" id="modelOnlineIndicator">检测中</span>
+<div class="status-bar" id="statusBar" title="statusBar">
+  <span class="stat-item" id="statusModelInfo" title="statusModelInfo">
+    <span class="label" id="statusModelLabel" title="statusModelLabel">模型:</span>
+    <span class="val" id="statusModelVal" title="statusModelVal">-</span>
+    <span class="model-online-indicator" id="modelOnlineIndicator" title="modelOnlineIndicator">检测中</span>
   </span>
-  <span class="sep">|</span>
-  <span class="stat-item" id="statusSessionInfo">
-    <span class="label">会话:</span>
-    <span class="val" id="statusSessionVal">-</span>
+  <span class="sep" id="sepModel" title="sepModel">|</span>
+  <span class="stat-item" id="statusSessionInfo" title="statusSessionInfo">
+    <span class="label" id="statusSessionLabel" title="statusSessionLabel">会话:</span>
+    <span class="val" id="statusSessionVal" title="statusSessionVal">-</span>
   </span>
-  <span class="sep">|</span>
-  <span class="stat-item">
-    <span class="label">运行:</span>
-    <span class="val" id="statusUptime">0s</span>
+  <span class="sep" id="sepSession" title="sepSession">|</span>
+  <span class="stat-item" id="statusUptimeItem" title="statusUptimeItem">
+    <span class="label" id="statusUptimeLabel" title="statusUptimeLabel">运行:</span>
+    <span class="val" id="statusUptime" title="statusUptime">0s</span>
   </span>
-  <span class="sep">|</span>
-  <span class="stat-item" id="statusResponseTime" style="display:none">
-    <span class="label">响应:</span>
-    <span class="val" id="statusResponseTimeVal">-</span>
+  <span class="sep" id="sepUptime" title="sepUptime">|</span>
+  <span class="stat-item" id="statusResponseTime" title="statusResponseTime" style="display:none">
+    <span class="label" id="statusResponseLabel" title="statusResponseLabel">响应:</span>
+    <span class="val" id="statusResponseTimeVal" title="statusResponseTimeVal">-</span>
   </span>
-  <span class="sep">|</span>
-  <span class="ctx-item" id="statusContextInfo" title="上下文使用情况">
-    <span class="label">上下文:</span>
-    <span class="val" id="statusCtxUsed">-</span>
-    <span class="ctx-max">/</span>
-    <span class="ctx-max" id="statusCtxMax">-</span>
-    <div class="ctx-progress-wrap">
-      <div class="ctx-progress">
-        <div class="ctx-progress-bar" id="statusCtxBar" style="width:0%"></div>
+  <span class="sep" id="sepResponse" title="sepResponse">|</span>
+  <span class="ctx-item" id="statusContextInfo" title="statusContextInfo">
+    <span class="label" id="statusCtxLabel" title="statusCtxLabel">上下文:</span>
+    <span class="val" id="statusCtxUsed" title="statusCtxUsed">-</span>
+    <span class="ctx-max" id="ctxMaxSep" title="ctxMaxSep">/</span>
+    <span class="ctx-max" id="statusCtxMax" title="statusCtxMax">-</span>
+    <div class="ctx-progress-wrap" id="ctxProgressWrap" title="ctxProgressWrap">
+      <div class="ctx-progress" id="ctxProgress" title="ctxProgress">
+        <div class="ctx-progress-bar" id="statusCtxBar" title="statusCtxBar" style="width:0%"></div>
       </div>
-      <span class="ctx-pct" id="statusCtxPct">-</span>
+      <span class="ctx-pct" id="statusCtxPct" title="statusCtxPct">-</span>
     </div>
   </span>
-  <div class="model-selector" id="modelSelector">
-    <div class="ms-dropdown" id="msDropdown"></div>
+  <div class="model-selector" id="modelSelector" title="modelSelector">
+    <div class="ms-dropdown" id="msDropdown" title="msDropdown"></div>
   </div>
 </div>
 
 <!-- LM Studio 断连提示横幅 -->
-<div class="lm-disconnect-banner" id="lmDisconnectBanner">
-  <span class="lm-banner-icon">⚠️</span>
-  <div class="lm-banner-text">
-    <strong>LM Studio 未连接</strong><br>
-    <span class="lm-banner-hint">请启动 LM Studio 并加载模型，加载后点击右侧"刷新"按钮</span>
+<div class="lm-disconnect-banner" id="lmDisconnectBanner" title="lmDisconnectBanner">
+  <span class="lm-banner-icon" id="lmBannerIcon" title="lmBannerIcon">⚠️</span>
+  <div class="lm-banner-text" id="lmBannerText" title="lmBannerText">
+    <strong id="lmBannerTitle" title="lmBannerTitle">LM Studio 未连接</strong><br>
+    <span class="lm-banner-hint" id="lmBannerHint" title="lmBannerHint">请启动 LM Studio 并加载模型，加载后点击右侧"刷新"按钮</span>
   </div>
-  <button class="lm-banner-btn" onclick="refreshModels()">🔄 刷新</button>
+  <button class="lm-banner-btn" id="lmBannerRefreshBtn" onclick="refreshModels()" title="lmBannerRefreshBtn">🔄 刷新</button>
 </div>
 
-<div class="chat-wrapper">
-  <div class="chat-container" id="chat"></div>
-  <button class="scroll-btn" id="scrollBtn" onclick="scrollToBottom()" title="滚动到底部">↓</button>
+<div class="chat-wrapper" id="chatWrapper" title="chatWrapper">
+  <div class="chat-container" id="chat" title="chat"></div>
+  <button class="scroll-btn" id="scrollBtn" onclick="scrollToBottom()" title="scrollBtn">↓</button>
 </div>
 
-<div class="hint-bar" id="hintBar">
-  <span class="toggle" id="hintToggle" onclick="toggleHints()">▾ 快捷命令</span>
-  <div class="tags-wrap">
-    <span class="tag" onclick="insertCmd('/status')">/status</span>
-    <span class="tag" onclick="insertCmd('/help')">/help</span>
-    <span class="tag" onclick="insertCmd('/models')">/models</span>
-    <span class="tag" onclick="insertCmd('/project list')">/project list</span>
-    <span class="tag" onclick="insertCmd('/summarize now')">/summarize</span>
-    <span class="tag" onclick="insertCmd('/memory search ')" style="border-style:dashed">🔍 搜索</span>
+<div class="hint-bar" id="hintBar" title="hintBar">
+  <span class="toggle" id="hintToggle" onclick="toggleHints()" title="hintToggle">▾ 快捷命令</span>
+  <div class="tags-wrap" id="hintTagsWrap" title="hintTagsWrap">
+    <span class="tag" id="hintStatus" onclick="insertCmd('/status')" title="hintStatus">/status</span>
+    <span class="tag" id="hintHelp" onclick="insertCmd('/help')" title="hintHelp">/help</span>
+    <span class="tag" id="hintModels" onclick="insertCmd('/models')" title="hintModels">/models</span>
+    <span class="tag" id="hintProjectList" onclick="insertCmd('/project list')" title="hintProjectList">/project list</span>
+    <span class="tag" id="hintSummarize" onclick="insertCmd('/summarize now')" title="hintSummarize">/summarize</span>
+    <span class="tag" id="hintMemorySearch" onclick="insertCmd('/memory search ')" style="border-style:dashed" title="hintMemorySearch">🔍 搜索</span>
   </div>
 </div>
 
 <!-- ═══ Upload Preview ═══ -->
-<div class="upload-preview" id="uploadPreview"></div>
+<div class="upload-preview" id="uploadPreview" title="uploadPreview"></div>
 
-<div class="input-area">
-  <div class="input-wrap">
-    <textarea id="input" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="1"></textarea>
-    <div class="input-actions">
-      <button onclick="document.getElementById('fileInput').click()" title="上传文件">📎</button>
-      <input type="file" id="fileInput" style="display:none" onchange="onFileSelected(event)" multiple>
-      <button onclick="stopGeneration()" id="stopBtn" title="停止生成" style="display:none;">⏹</button>
+<div class="input-area" id="inputArea" title="inputArea">
+  <div class="input-wrap" id="inputWrap" title="inputWrap">
+    <textarea id="input" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="1" title="input"></textarea>
+    <div class="input-actions" id="inputActions" title="inputActions">
+      <button id="uploadBtn" onclick="document.getElementById('fileInput').click()" title="uploadBtn">📎</button>
+      <input type="file" id="fileInput" style="display:none" onchange="onFileSelected(event)" multiple title="fileInput">
+      <button onclick="stopGeneration()" id="stopBtn" title="stopBtn" style="display:none;">⏹</button>
     </div>
-    <span class="char-count" id="charCount"></span>
+    <span class="char-count" id="charCount" title="charCount"></span>
   </div>
-  <button id="sendBtn" onclick="send()" title="发送">➤</button>
+  <button id="sendBtn" onclick="send()" title="sendBtn">➤</button>
 </div>
 
 <!-- ═══ Agent 实时状态条 ═══ -->
-<div id="agentStatusBar" class="agent-status-bar">
-  <span class="asb-dot" id="asbDot"></span>
-  <span class="asb-text" id="asbText">就绪</span>
-  <div class="asb-progress" id="asbProgressWrap" style="display:none">
-    <div class="asb-progress-bar" id="asbProgressBar"></div>
+<div id="agentStatusBar" class="agent-status-bar" title="agentStatusBar">
+  <span class="asb-dot" id="asbDot" title="asbDot"></span>
+  <span class="asb-text" id="asbText" title="asbText">就绪</span>
+  <div class="asb-progress" id="asbProgressWrap" title="asbProgressWrap" style="display:none">
+    <div class="asb-progress-bar" id="asbProgressBar" title="asbProgressBar"></div>
   </div>
-  <span class="asb-time" id="asbTime"></span>
+  <span class="asb-time" id="asbTime" title="asbTime"></span>
 </div>
 
 <!-- ═══ 模型 Payload 调试面板 ═══ -->
-<div id="modelPayloadPanel" class="model-payload-panel">
-  <div class="mpp-header" onclick="togglePayloadPanel()">
-    <span class="mpp-title" id="mppTitle">📨 发送给模型的消息</span>
-    <span class="mpp-badge" id="mppCount">0 条</span>
-    <span id="mppNav" style="font-size:11px;display:none">
-      <button onclick="event.stopPropagation();navPayload(-1)" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px">◀ prev</button>
-      <span id="mppNavInfo" style="color:var(--text-muted)"></span>
-      <button onclick="event.stopPropagation();navPayload(1)" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px">next ▶</button>
+<div id="modelPayloadPanel" class="model-payload-panel" title="modelPayloadPanel">
+  <div class="mpp-header" id="mppHeader" onclick="togglePayloadPanel()" title="mppHeader">
+    <span class="mpp-title" id="mppTitle" title="mppTitle">📨 发送给模型的消息</span>
+    <span class="mpp-badge" id="mppCount" title="mppCount">0 条</span>
+    <span id="mppNav" title="mppNav" style="font-size:11px;display:none">
+      <button id="mppPrevBtn" onclick="event.stopPropagation();navPayload(-1)" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px" title="mppPrevBtn">◀ prev</button>
+      <span id="mppNavInfo" title="mppNavInfo" style="color:var(--text-muted)"></span>
+      <button id="mppNextBtn" onclick="event.stopPropagation();navPayload(1)" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px" title="mppNextBtn">next ▶</button>
     </span>
-    <span style="font-size:11px;color:var(--text-muted)">点击折叠 △</span>
+    <span id="mppCollapseHint" title="mppCollapseHint" style="font-size:11px;color:var(--text-muted)">点击折叠 △</span>
   </div>
-  <div class="mpp-meta" id="mppMeta"></div>
-  <div class="mpp-body" id="mppBody"></div>
+  <div class="mpp-meta" id="mppMeta" title="mppMeta"></div>
+  <div class="mpp-body" id="mppBody" title="mppBody"></div>
 </div>
 
-<div class="drawer-overlay" id="drawerOverlay" onclick="closeSettings()"></div>
-<div class="settings-drawer" id="settingsDrawer">
-  <div class="sd-header">
-    <h2>⚙ 设置</h2>
-    <button onclick="closeSettings()">✕</button>
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeSettings()" title="drawerOverlay"></div>
+<div class="settings-drawer" id="settingsDrawer" title="settingsDrawer">
+  <div class="sd-header" id="settingsDrawerHeader" title="settingsDrawerHeader">
+    <h2 id="settingsDrawerTitle" title="settingsDrawerTitle">⚙ 设置</h2>
+    <button id="settingsCloseBtn" onclick="closeSettings()" title="settingsCloseBtn">✕</button>
   </div>
-  <div class="sd-body">
-    <div class="sd-section">
-      <h3>模型配置</h3>
-      <div class="sd-field"><label>模型</label><select id="cfgModel"><option value="">加载中...</option></select></div>
-      <div class="sd-field"><label>API 地址</label><input id="cfgBaseUrl" value="http://127.0.0.1:1234/v1" placeholder="http://127.0.0.1:1234/v1"><div class="hint">LM Studio API 地址</div></div>
-      <div class="sd-field"><label>最大 Token</label><input id="cfgMaxTokens" type="number" value="4096" min="128" max="32768"></div>
+  <div class="sd-body" id="settingsDrawerBody" title="settingsDrawerBody">
+    <div class="sd-section" id="sdModelSection" title="sdModelSection">
+      <h3 id="sdModelSectionTitle" title="sdModelSectionTitle">模型配置</h3>
+      <div class="sd-field" id="sdFieldModel" title="sdFieldModel"><label id="labelCfgModel" title="labelCfgModel">模型</label><select id="cfgModel" title="cfgModel"><option value="">加载中...</option></select></div>
+      <div class="sd-field" id="sdFieldBaseUrl" title="sdFieldBaseUrl"><label id="labelCfgBaseUrl" title="labelCfgBaseUrl">API 地址</label><input id="cfgBaseUrl" value="http://127.0.0.1:1234/v1" placeholder="http://127.0.0.1:1234/v1" title="cfgBaseUrl"><div class="hint" id="hintCfgBaseUrl" title="hintCfgBaseUrl">LM Studio API 地址</div></div>
+      <div class="sd-field" id="sdFieldMaxTokens" title="sdFieldMaxTokens"><label id="labelCfgMaxTokens" title="labelCfgMaxTokens">最大 Token</label><input id="cfgMaxTokens" type="number" value="4096" min="128" max="32768" title="cfgMaxTokens"></div>
     </div>
-    <div class="sd-section">
-      <h3>超时 &amp; 重试</h3>
-      <div class="sd-field"><label>请求超时 (ms)</label><input id="cfgTimeout" type="number" value="60000" min="5000" max="300000" step="5000"><div class="hint">建议 60000 (60秒) 以上</div></div>
-      <div class="sd-field"><label>聊天接口超时 (ms)</label><input id="cfgChatTimeout" type="number" value="120000" min="10000" max="600000" step="10000"><div class="hint">流式聊天接口的超时时间</div></div>
-      <div class="sd-field"><label>最大重试</label><input id="cfgRetries" type="number" value="1" min="0" max="5"></div>
+    <div class="sd-section" id="sdTimeoutSection" title="sdTimeoutSection">
+      <h3 id="sdTimeoutSectionTitle" title="sdTimeoutSectionTitle">超时 &amp; 重试</h3>
+      <div class="sd-field" id="sdFieldTimeout" title="sdFieldTimeout"><label id="labelCfgTimeout" title="labelCfgTimeout">请求超时 (ms)</label><input id="cfgTimeout" type="number" value="60000" min="5000" max="300000" step="5000" title="cfgTimeout"><div class="hint" id="hintCfgTimeout" title="hintCfgTimeout">建议 60000 (60秒) 以上</div></div>
+      <div class="sd-field" id="sdFieldChatTimeout" title="sdFieldChatTimeout"><label id="labelCfgChatTimeout" title="labelCfgChatTimeout">聊天接口超时 (ms)</label><input id="cfgChatTimeout" type="number" value="120000" min="10000" max="600000" step="10000" title="cfgChatTimeout"><div class="hint" id="hintCfgChatTimeout" title="hintCfgChatTimeout">流式聊天接口的超时时间</div></div>
+      <div class="sd-field" id="sdFieldRetries" title="sdFieldRetries"><label id="labelCfgRetries" title="labelCfgRetries">最大重试</label><input id="cfgRetries" type="number" value="1" min="0" max="5" title="cfgRetries"></div>
     </div>
-    <div class="sd-section">
-      <h3>界面</h3>
-      <div class="sd-field"><label>主题</label><select id="cfgTheme"><option value="dark">暗色</option><option value="light">亮色</option><option value="system">跟随系统</option></select></div>
+    <div class="sd-section" id="sdThemeSection" title="sdThemeSection">
+      <h3 id="sdThemeSectionTitle" title="sdThemeSectionTitle">界面</h3>
+      <div class="sd-field" id="sdFieldTheme" title="sdFieldTheme"><label id="labelCfgTheme" title="labelCfgTheme">主题</label><select id="cfgTheme" title="cfgTheme"><option value="dark">暗色</option><option value="light">亮色</option><option value="system">跟随系统</option></select></div>
     </div>
   </div>
-  <div class="sd-footer">
-    <button class="btn-secondary" onclick="closeSettings()">取消</button>
-    <button class="btn-primary" onclick="saveSettings()">保存设置</button>
+  <div class="sd-footer" id="settingsDrawerFooter" title="settingsDrawerFooter">
+    <button class="btn-secondary" id="settingsCancelBtn" onclick="closeSettings()" title="settingsCancelBtn">取消</button>
+    <button class="btn-primary" id="settingsSaveBtn" onclick="saveSettings()" title="settingsSaveBtn">保存设置</button>
   </div>
 </div>
 
 <!-- ═══ Session Sidebar ═══ -->
-<div class="session-overlay" id="sessionOverlay" onclick="toggleSessionSidebar()"></div>
-<div class="session-sidebar" id="sessionSidebar">
-  <div class="ss-header">
-    <h2>💬 会话列表</h2>
-    <button onclick="toggleSessionSidebar()">✕</button>
+<div class="session-overlay" id="sessionOverlay" onclick="toggleSessionSidebar()" title="sessionOverlay"></div>
+<div class="session-sidebar" id="sessionSidebar" title="sessionSidebar">
+  <div class="ss-header" id="sessionSidebarHeader" title="sessionSidebarHeader">
+    <h2 id="sessionSidebarTitle" title="sessionSidebarTitle">💬 会话列表</h2>
+    <button id="sessionSidebarCloseBtn" onclick="toggleSessionSidebar()" title="sessionSidebarCloseBtn">✕</button>
   </div>
-  <div class="ss-body" id="sessionListBody">
-    <button class="ss-new-btn" onclick="newSession()">＋ 新建会话</button>
-    <div id="sessionList"></div>
+  <div class="ss-body" id="sessionListBody" title="sessionListBody">
+    <button class="ss-new-btn" id="newSessionBtn" onclick="newSession()" title="newSessionBtn">＋ 新建会话</button>
+    <div id="sessionList" title="sessionList"></div>
   </div>
 </div>
 
-<div class="toast-container" id="toastContainer"></div>
+<div class="toast-container" id="toastContainer" title="toastContainer"></div>
 
 <!-- ═══ Add Model Modal (QClaw-style: Vendor → Model → Key) ═══ -->
-<div class="modal-overlay" id="providerModal">
-  <div class="modal-box add-model-modal">
-    <h2>添加自定义大模型<button class="close-btn" onclick="closeProviderModal()">✕</button></h2>
+<div class="modal-overlay" id="providerModal" title="providerModal">
+  <div class="modal-box add-model-modal" id="addModelModal" title="addModelModal">
+    <h2 id="addModelTitle" title="addModelTitle">添加自定义大模型<button class="close-btn" id="closeProviderModalBtn" onclick="closeProviderModal()" title="closeProviderModalBtn">✕</button></h2>
 
     <!-- Tab bar -->
-    <div class="am-tabs">
-      <button class="am-tab active" data-tab="api" onclick="switchAmTab('api')">模型 API</button>
-      <button class="am-tab" data-tab="local" onclick="switchAmTab('local')">本地模型 Ollama</button>
+    <div class="am-tabs" id="amTabs" title="amTabs">
+      <button class="am-tab active" id="amTabApi" data-tab="api" onclick="switchAmTab('api')" title="amTabApi">模型 API</button>
+      <button class="am-tab" id="amTabLocal" data-tab="local" onclick="switchAmTab('local')" title="amTabLocal">本地模型 Ollama</button>
     </div>
 
     <!-- Tab: 模型 API -->
-    <div class="am-panel active" id="amPanelApi">
-      <div class="modal-field">
-        <label>模型厂商：</label>
-        <select id="pmVendor" onchange="onVendorChange()">
+    <div class="am-panel active" id="amPanelApi" title="amPanelApi">
+      <div class="modal-field" id="pmVendorField" title="pmVendorField">
+        <label id="labelPmVendor" title="labelPmVendor">模型厂商：</label>
+        <select id="pmVendor" onchange="onVendorChange()" title="pmVendor">
           <option value="">— 选择厂商 —</option>
           <option value="deepseek">深度求索（DeepSeek）</option>
           <option value="openai">OpenAI</option>
@@ -1198,64 +1198,64 @@ code.inline {
           <option value="custom">自定义地址…</option>
         </select>
       </div>
-      <div class="modal-field" id="pmModelField">
-        <label>模型名称：</label>
-        <select id="pmModel" onchange="onModelChange()">
+      <div class="modal-field" id="pmModelField" title="pmModelField">
+        <label id="labelPmModel" title="labelPmModel">模型名称：</label>
+        <select id="pmModel" onchange="onModelChange()" title="pmModel">
           <option value="">— 先选择厂商 —</option>
         </select>
       </div>
-      <div class="modal-field">
-        <label>API Key：</label>
-        <div class="key-input-wrap">
-          <input id="pmKey" type="password" placeholder="sk-... 或 api-key..." value="">
-          <button class="toggle-key-btn" onclick="toggleKeyVisibility()" title="显示/隐藏">👁</button>
+      <div class="modal-field" id="pmKeyField" title="pmKeyField">
+        <label id="labelPmKey" title="labelPmKey">API Key：</label>
+        <div class="key-input-wrap" id="pmKeyInputWrap" title="pmKeyInputWrap">
+          <input id="pmKey" type="password" placeholder="sk-... 或 api-key..." value="" title="pmKey">
+          <button class="toggle-key-btn" id="toggleKeyBtn" onclick="toggleKeyVisibility()" title="toggleKeyBtn">👁</button>
         </div>
-        <a id="pmKeyLink" href="#" target="_blank" style="display:none;font-size:10px;color:var(--accent);text-decoration:none;">前往官网获取 →</a>
+        <a id="pmKeyLink" href="#" target="_blank" style="display:none;font-size:10px;color:var(--accent);text-decoration:none;" title="pmKeyLink">前往官网获取 →</a>
       </div>
-      <div class="modal-hint">
-        <span class="hint-icon">⚠️</span> 可选用自定义大模型配置，使用时请遵循相关法律法规
+      <div class="modal-hint" id="pmHint" title="pmHint">
+        <span class="hint-icon" id="pmHintIcon" title="pmHintIcon">⚠️</span> 可选用自定义大模型配置，使用时请遵循相关法律法规
       </div>
-      <div class="modal-actions">
-        <button class="btn-text" onclick="showAmAdvanced()">＋ 自定义配置</button>
-        <div style="flex:1"></div>
-        <button class="btn-secondary" onclick="closeProviderModal()">取 消</button>
-        <button class="btn-primary" onclick="saveProvider()">确 定</button>
+      <div class="modal-actions" id="pmActions" title="pmActions">
+        <button class="btn-text" id="pmAdvancedBtn" onclick="showAmAdvanced()" title="pmAdvancedBtn">＋ 自定义配置</button>
+        <div id="pmSpacer" title="pmSpacer" style="flex:1"></div>
+        <button class="btn-secondary" id="pmCancelBtn" onclick="closeProviderModal()" title="pmCancelBtn">取 消</button>
+        <button class="btn-primary" id="pmSaveBtn" onclick="saveProvider()" title="pmSaveBtn">确 定</button>
       </div>
     </div>
 
     <!-- Tab: 本地 Ollama -->
-    <div class="am-panel" id="amPanelLocal">
-      <div class="modal-field">
-        <label>Ollama 地址：</label>
-        <input id="ollamaUrl" placeholder="http://localhost:11434" value="http://localhost:11434">
+    <div class="am-panel" id="amPanelLocal" title="amPanelLocal">
+      <div class="modal-field" id="ollamaUrlField" title="ollamaUrlField">
+        <label id="labelOllamaUrl" title="labelOllamaUrl">Ollama 地址：</label>
+        <input id="ollamaUrl" placeholder="http://localhost:11434" value="http://localhost:11434" title="ollamaUrl">
       </div>
-      <div class="modal-field">
-        <label>模型名称：</label>
-        <input id="ollamaModel" placeholder="如 llama3.2, qwen2.5:7b..." value="">
-        <div class="hint">输入 Ollama 中已拉取的模型名称</div>
+      <div class="modal-field" id="ollamaModelField" title="ollamaModelField">
+        <label id="labelOllamaModel" title="labelOllamaModel">模型名称：</label>
+        <input id="ollamaModel" placeholder="如 llama3.2, qwen2.5:7b..." value="" title="ollamaModel">
+        <div class="hint" id="hintOllamaModel" title="hintOllamaModel">输入 Ollama 中已拉取的模型名称</div>
       </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" onclick="testOllama()">📡 测试连接</button>
-        <div style="flex:1"></div>
-        <button class="btn-secondary" onclick="closeProviderModal()">取 消</button>
-        <button class="btn-primary" onclick="saveOllama()">确 定</button>
+      <div class="modal-actions" id="ollamaActions" title="ollamaActions">
+        <button class="btn-secondary" id="ollamaTestBtn" onclick="testOllama()" title="ollamaTestBtn">📡 测试连接</button>
+        <div id="ollamaSpacer" title="ollamaSpacer" style="flex:1"></div>
+        <button class="btn-secondary" id="ollamaCancelBtn" onclick="closeProviderModal()" title="ollamaCancelBtn">取 消</button>
+        <button class="btn-primary" id="ollamaSaveBtn" onclick="saveOllama()" title="ollamaSaveBtn">确 定</button>
       </div>
     </div>
 
     <!-- Advanced config (collapsed) -->
-    <div class="am-advanced" id="amAdvanced" style="display:none">
-      <div class="modal-field">
-        <label>API 地址（自动填充，可修改）</label>
-        <input id="pmUrl" placeholder="https://api.deepseek.com/v1" value="">
+    <div class="am-advanced" id="amAdvanced" style="display:none" title="amAdvanced">
+      <div class="modal-field" id="pmUrlField" title="pmUrlField">
+        <label id="labelPmUrl" title="labelPmUrl">API 地址（自动填充，可修改）</label>
+        <input id="pmUrl" placeholder="https://api.deepseek.com/v1" value="" title="pmUrl">
       </div>
-      <div class="modal-field">
-        <label>显示名称</label>
-        <input id="pmDisplayName" placeholder="留空则使用厂商+模型名" value="">
+      <div class="modal-field" id="pmDisplayNameField" title="pmDisplayNameField">
+        <label id="labelPmDisplayName" title="labelPmDisplayName">显示名称</label>
+        <input id="pmDisplayName" placeholder="留空则使用厂商+模型名" value="" title="pmDisplayName">
       </div>
     </div>
 
     <!-- Saved providers list -->
-    <div class="provider-list" id="providerList"></div>
+    <div class="provider-list" id="providerList" title="providerList"></div>
   </div>
 </div>
 
@@ -1504,7 +1504,8 @@ function updateModelOnlineIndicator() {
 
 async function fetchModels() {
   try {
-    const resp = await fetch(MODELS_API), data = await resp.json();
+    // 页面加载时直接调用 /api/models/scan（GET /api/models 在 agent 未就绪时可能返回空）
+    const resp = await fetch(MODELS_SCAN_API, { method: 'POST' }), data = await resp.json();
     availableModels = (data.models || []).map(m => ({
       ...m,
       provider: 'lmstudio',

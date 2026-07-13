@@ -1,4 +1,3 @@
-// @ts-nocheck
 // TaskHandler — Phase 3 重构：任务处理模块
 // 从 agent-core.ts 提取，集成 tracer/circuitBreaker/projectManager 等完整依赖
 // 依赖注入模式，便于测试和后续维护

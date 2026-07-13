@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { test } from 'node:test';
+﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 test('tools: registry module loads', async () => {

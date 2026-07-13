@@ -88,5 +88,5 @@ profiles:
   dataDir: data/profiles
 server:
   port: 19701
-  chatTimeoutMs: 300000
+  chatTimeoutMs: 350000
   maxUploadSizeMB: 20

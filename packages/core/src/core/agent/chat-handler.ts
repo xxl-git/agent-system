@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ChatHandler — Phase 2 重构：聊天处理模块
 // 从 agent-core.ts 提取，集成完整的装配追踪、熔断器、tracer 等依赖
 // 包含 handleChat (非流式) 和 handleStream (流式) 两个入口

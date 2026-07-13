@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -177,31 +177,31 @@ body::before {
 <body>
 
 <!-- Header -->
-<div class="header">
+<div class="header" id="inspectorHeader" title="inspectorHeader">
   <h1>🔬 消息装配流水线</h1>
-  <span class="badge" id="statusBadge">等待数据</span>
+  <span class="badge" id="statusBadge" title="statusBadge">等待数据</span>
   <div class="nav-links">
-    <a href="agent-ui.html">💬 聊天</a>
-    <a href="logs-viewer.html">📄 日志</a>
-    <a href="admin-panel.html">⚙ 设置</a>
-    <label class="auto-refresh">
-      <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh()">
+    <a href="agent-ui.html" id="navChat" title="navChat">💬 聊天</a>
+    <a href="logs-viewer.html" id="navLogs" title="navLogs">📄 日志</a>
+    <a href="admin-panel.html" id="navAdmin" title="navAdmin">⚙ 设置</a>
+    <label class="auto-refresh" id="autoRefreshLabel" title="autoRefreshLabel">
+      <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh()" title="autoRefresh">
       <span>自动刷新 (5s)</span>
     </label>
-    <a href="javascript:fetchAssembly()" style="color:var(--accent)">🔄 刷新</a>
+    <a href="javascript:fetchAssembly()" id="refreshButton" title="refreshButton" style="color:var(--accent)">🔄 刷新</a>
   </div>
 </div>
 
 <!-- Model Payload Link -->
-<div style="display:flex;gap:10px;align-items:center;z-index:1">
-  <div class="model-payload-link" onclick="switchToPayloadTab()">
+<div id="payloadLinkBar" title="payloadLinkBar" style="display:flex;gap:10px;align-items:center;z-index:1">
+  <div class="model-payload-link" id="payloadLink" title="payloadLink" onclick="switchToPayloadTab()">
     📨 查看《模型实时载荷》面板（LLM Router 原始 payload）
   </div>
 </div>
 
 <!-- Stage List -->
-<div id="stageList" class="stage-list">
-  <div class="empty-state" id="emptyState">
+<div id="stageList" class="stage-list" title="stageList">
+  <div class="empty-state" id="emptyState" title="emptyState">
     <div class="icon">⚙️</div>
     <div>等待消息装配数据...</div>
     <div class="hint">发送一条消息后，这里会展示每一步的消息变化</div>
