@@ -56,6 +56,9 @@ export interface AgentSystemConfig {
     port?: number;
     chatTimeoutMs?: number;
     maxUploadSizeMB?: number;
+    cors?: {
+      allowedOrigins?: string[];
+    };
   };
   agent: {
     loopIntervalMs: number;
@@ -206,6 +209,9 @@ export const DEFAULT_CONFIG: AgentSystemConfig = {
     port: 19701,
     chatTimeoutMs: 300000,
     maxUploadSizeMB: 20,
+    cors: {
+      allowedOrigins: ['http://127.0.0.1:19701', 'http://localhost:19701'],
+    },
   },
   profiles: {
     dataDir: 'data/profiles',

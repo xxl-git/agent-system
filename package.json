@@ -18,7 +18,7 @@
     "server": "node dist/server/agent-server.js",
     "launch": "powershell -File agent.ps1",
     "dry-run": "npx ts-node tests/test-dry-run.ts",
-    "test:units": "npx ts-node packages/events/src/__tests__/events.test.ts && npx ts-node packages/experience/src/__tests__/experience.test.ts && npx ts-node packages/llm/src/__tests__/llm.test.ts && npx ts-node packages/memory/src/__tests__/memory.test.ts && npx ts-node packages/models-core/src/__tests__/models-core.test.ts && npx ts-node packages/prompts/src/__tests__/prompts.test.ts && npx ts-node packages/resilience/src/__tests__/resilience.test.ts && npx ts-node packages/skills/src/__tests__/skills.test.ts && npx ts-node packages/tools/src/__tests__/tools.test.ts",
+    "test:units": "npx ts-node packages/events/src/__tests__/events.test.ts && npx ts-node packages/experience/src/__tests__/experience.test.ts && npx ts-node packages/llm/src/__tests__/llm.test.ts && npx ts-node packages/memory/src/__tests__/memory.test.ts && npx ts-node packages/models-core/src/__tests__/models-core.test.ts && npx ts-node packages/prompts/src/__tests__/prompts.test.ts && npx ts-node packages/resilience/src/__tests__/resilience.test.ts && npx ts-node packages/resilience/src/__tests__/nonsense-detector.test.ts && npx ts-node packages/resilience/src/__tests__/circuit-breaker-unit.test.ts && npx ts-node packages/resilience/src/__tests__/idle-task-manager.test.ts && npx ts-node packages/skills/src/__tests__/skills.test.ts && npx ts-node packages/tools/src/__tests__/tools.test.ts",
     "test": "npm run typecheck && npm run test:units",
     "clean": "Remove-Item -Recurse -Force dist, packages/*/dist, *.tsbuildinfo, packages/*.tsbuildinfo -ErrorAction SilentlyContinue"
   },

@@ -90,3 +90,11 @@ server:
   port: 19701
   chatTimeoutMs: 350000
   maxUploadSizeMB: 20
+  cors:
+    # 允许的来源列表，空或 ["*"] 表示允许所有
+    # 生产环境建议设置为具体域名，如 ["http://127.0.0.1:19701", "http://localhost:19701"]
+    allowedOrigins:
+      - "http://127.0.0.1:19701"
+      - "http://localhost:19701"
+      - "http://localhost:5173"
+      - "http://localhost:3000"

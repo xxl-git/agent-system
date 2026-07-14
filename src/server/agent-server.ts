@@ -490,12 +490,33 @@ const routeDeps: RouteDeps = {
 const router = createRouter(routeDeps);
 
 // ─── HTTP Server ───
-const server = http.createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+// CORS: 从配置读取允许的来源列表，未配置则回退到 *
+function getCorsOrigin(reqOrigin: string | undefined): string {
+  let origins: string[] = [];
+  try {
+    const cfg = getConfig();
+    origins = cfg?.server?.cors?.allowedOrigins || [];
+  } catch { /* config not loaded yet */ }
+  if (origins.length === 0 || origins.includes('*')) return '*';
+  if (reqOrigin && origins.includes(reqOrigin)) return reqOrigin;
+  return ''; // 不允许
+}
 
-  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+const server = http.createServer(async (req, res) => {
+  const corsOrigin = getCorsOrigin(req.headers.origin as string | undefined);
+  if (corsOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+  }
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(corsOrigin ? 204 : 403);
+    res.end();
+    return;
+  }
 
   const url = req.url || '/';
 
