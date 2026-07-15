@@ -5,6 +5,14 @@ import * as path from 'path';
 import type { ChatMessage, ChatCompletionResponse, LMStudioAdapter } from '../models/adapters/lmstudio';
 import logger from '../logger';
 
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+
 /** 动态读取项目版本（避免硬编码版本号过时） */
 function getVersion(): string {
   try {
@@ -199,9 +207,9 @@ export class SmartAdapter {
         logger.debug(`[SmartAdapter] ✓ 响应 ${content.length}字, ${elapsed}ms, 尝试${attempt + 1}`);
         return result;
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         lastError = err;
-        const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('abort');
+        const isTimeout = err.name === 'TimeoutError' || errorMessage(err)?.includes('timeout') || errorMessage(err)?.includes('abort');
 
         if (isTimeout) {
           localTimeouts++;
@@ -227,7 +235,7 @@ export class SmartAdapter {
           }
         } else {
           // 非超时错误（HTTP 错误等）
-          logger.error(`[SmartAdapter] ❌ 调用失败: ${err.message}`);
+          logger.error(`[SmartAdapter] ❌ 调用失败: ${errorMessage(err)}`);
           if (attempt < this.config.maxRetries) {
             await this.sleep(this.config.retryBaseMs * Math.pow(2, attempt));
             continue;

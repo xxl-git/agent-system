@@ -1,7 +1,15 @@
 /**
  * =============================================================================
  * 工具注册表 — Agent System 工具执行层
- * =============================================================================
+ * ===========================================================
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+==================
  *
  * 职责：
  * - 统一工具执行入口（call(name, args)）
@@ -248,8 +256,8 @@ async function runWebSearch(args: any): Promise<string> {
     const { stdout } = await execAsync(curlCmd, { timeout: 20000, cwd: 'D:\\' });
     const clean = stdout.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
     return clean.slice(0, 2000) || `搜索结果（关键词: ${keyword}）`;
-  } catch (err: any) {
-    throw new Error(`搜索失败: ${err.message ?? '网络错误'}`);
+  } catch (err: unknown) {
+    throw new Error(`搜索失败: ${errorMessage(err) ?? '网络错误'}`);
   }
 }
 
@@ -278,8 +286,8 @@ async function runExec(args: any): Promise<string> {
     });
     const out = stdout || stderr || '(命令执行完成，无输出)';
     return out.slice(0, 5000);
-  } catch (err: any) {
-    throw new Error(`命令执行失败: ${err.message ?? '未知错误'}`);
+  } catch (err: unknown) {
+    throw new Error(`命令执行失败: ${errorMessage(err) ?? '未知错误'}`);
   }
 }
 
@@ -398,8 +406,8 @@ class ToolRegistry {
         durationMs: Date.now() - t0,
         toolName,
       };
-    } catch (err: any) {
-      recordToolFailure(toolName, err.message);
+    } catch (err: unknown) {
+      recordToolFailure(toolName, errorMessage(err));
 
       // 连续失败 → 触发熔断
       const cbState = _circuitBreaker?.tool(toolName);
@@ -408,7 +416,7 @@ class ToolRegistry {
         logger.warn(`[ToolRegistry] 🔴 工具 ${toolName} 已熔断并禁用`);
       }
 
-      const msg = err.message ?? '未知错误';
+      const msg = errorMessage(err) ?? '未知错误';
       logger.warn(`[ToolRegistry] ✗ ${toolName}: ${msg}`);
 
       return {

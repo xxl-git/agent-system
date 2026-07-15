@@ -12,6 +12,14 @@ import { getCheckpointManager } from '@agent-system/resilience';
 import type { CheckpointManager, CompletedStep } from '@agent-system/resilience';
 import logger from '../logger';
 
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+
 export interface OrchestratorConfig {
   maxRetries: number;
   heartbeatIntervalMs: number;
@@ -221,12 +229,12 @@ export class Orchestrator extends EventEmitter {
       this.emit('execution:done', summary);
       return summary;
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.isBusy = false;
       this.emit('execution:error', err);
       // 失败时保留检查点，供 /resume 恢复
       logger.warn(`[Orchestrator] 任务失败，检查点已保留: ${this.currentTaskId}`);
-      return `❌ 执行出错: ${err.message}\n💡 可使用 /resume 恢复任务`;
+      return `❌ 执行出错: ${errorMessage(err)}\n💡 可使用 /resume 恢复任务`;
     }
   }
 

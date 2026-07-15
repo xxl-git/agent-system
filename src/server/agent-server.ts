@@ -13,6 +13,12 @@ import { sessionStore } from './session-store';
 import { createRouter, RouteDeps } from './routes';
 import { createRouteContext, parseUrl } from './routes/router';
 
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 const PORT = parseInt(process.env.PORT || String(getConfig().server?.port || 19701), 10);
 const STATIC_DIR = path.resolve(__dirname, '..', '..');
 
@@ -309,9 +315,10 @@ const routeDeps: RouteDeps = {
       const found = (lmData.data || []).find((m: any) => m.id === modelId);
       if (!found) throw new Error(`模型 "${modelId}" 未在 LM Studio 中加载`);
       modelInfo = found;
-    } catch (err: any) {
-      if (err.message?.includes('未在 LM Studio')) throw err;
-      throw new Error(`无法连接 LM Studio: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = errorMessage(err);
+      if (msg.includes('未在 LM Studio')) throw err;
+      throw new Error(`无法连接 LM Studio: ${msg}`);
     }
     const oldModel = agent.adapter.model;
     agent.adapter.setModel(modelId);
@@ -326,7 +333,7 @@ const routeDeps: RouteDeps = {
         fs.writeFileSync(yamlPath, updated, 'utf-8');
         logger.info(`[AgentServer] 模型切换已持久化到 YAML: ${oldModel} → ${modelId}`);
       }
-    } catch (yamlErr: any) {
+    } catch (yamlErr: unknown) {
       logger.warn('[AgentServer] 更新 YAML 模型配置失败', yamlErr);
     }
     try { initConfig(); } catch { /* ignore */ }
@@ -443,7 +450,7 @@ const routeDeps: RouteDeps = {
       agentEventBus.off('chat_done', writers.onDone);
       agentEventBus.off('chat_error', writers.onError);
       return fullReply;
-    } catch (err: any) {
+    } catch (err: unknown) {
       agentEventBus.off('chat_chunk', writers.onChunk);
       agentEventBus.off('chat_done', writers.onDone);
       agentEventBus.off('chat_error', writers.onError);
@@ -538,10 +545,11 @@ const server = http.createServer(async (req, res) => {
       await router.execute(match.entry, ctx);
       return;
     }
-  } catch (err: any) {
-    logger.warn(`[Router] 路由处理错误: ${err?.message || err}`);
+  } catch (err: unknown) {
+    const msg = errorMessage(err);
+    logger.warn(`[Router] 路由处理错误: ${msg}`);
     res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: err?.message || 'router error' }));
+    res.end(JSON.stringify({ error: msg }));
     return;
   }
 
@@ -702,8 +710,8 @@ function gracefulShutdown(signal: string) {
   try {
     agent?.stop();
     logger.info('[Shutdown] ✓ Agent 已停止');
-  } catch (err: any) {
-    logger.error('[Shutdown] Agent 停止失败:', err?.message);
+  } catch (err: unknown) {
+    logger.error('[Shutdown] Agent 停止失败:', errorMessage(err));
   }
 
   // 3. 关闭所有 SSE 客户端连接

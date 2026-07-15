@@ -3,6 +3,20 @@ import type { ToolDef } from './types';
 import { exec as cpExec } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, readFile, mkdir } from 'fs/promises';
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+/** 从 unknown 错误中获取 stdout/stderr (child_process exec error) */
+function execErrorOutput(err: unknown): { stdout: string; stderr: string } {
+  if (err && typeof err === 'object' && 'stdout' in err && 'stderr' in err) {
+    return { stdout: String(err.stdout || ''), stderr: String(err.stderr || '') };
+  }
+  return { stdout: '', stderr: '' };
+}
 import { existsSync } from 'fs';
 import * as path from 'path';
 
@@ -103,11 +117,10 @@ export const execTool: ToolDef = {
         output: stdout || stderr || '(无输出)',
         durationMs: Date.now() - start,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       return {
         success: false,
-        output: err.stdout || '',
-        error: err.stderr || err.message,
+        output: execErrorOutput(err).stdout, error: execErrorOutput(err).stderr || errorMessage(err),
         durationMs: Date.now() - start,
       };
     }
@@ -147,8 +160,8 @@ export const writeFileTool: ToolDef = {
         output: `文件已写入: ${safe} (${content.length} 字节)`,
         durationMs: Date.now() - start,
       };
-    } catch (err: any) {
-      return { success: false, output: '', error: err.message, durationMs: Date.now() - start };
+    } catch (err: unknown) {
+      return { success: false, output: '', error: errorMessage(err), durationMs: Date.now() - start };
     }
   },
 };
@@ -183,8 +196,8 @@ export const readFileTool: ToolDef = {
           : content,
         durationMs: Date.now() - start,
       };
-    } catch (err: any) {
-      return { success: false, output: '', error: err.message, durationMs: Date.now() - start };
+    } catch (err: unknown) {
+      return { success: false, output: '', error: errorMessage(err), durationMs: Date.now() - start };
     }
   },
 };
@@ -220,8 +233,8 @@ export const webSearchTool: ToolDef = {
         .join('\n');
 
       return { success: true, output, durationMs: Date.now() - start };
-    } catch (err: any) {
-      return { success: false, output: '', error: err.message, durationMs: Date.now() - start };
+    } catch (err: unknown) {
+      return { success: false, output: '', error: errorMessage(err), durationMs: Date.now() - start };
     }
   },
 };

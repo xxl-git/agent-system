@@ -3,6 +3,17 @@ import type { ToolDef } from './types';
 import { exec as cpExec } from 'child_process';
 import { promisify } from 'util';
 import { writeFile, readFile } from 'fs/promises';
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+function execErrorOutput(err: unknown): { stdout: string; stderr: string } {
+  if (err && typeof err === 'object' && 'stdout' in err && 'stderr' in err) {
+    return { stdout: String(err.stdout || ''), stderr: String(err.stderr || '') };
+  }
+  return { stdout: '', stderr: '' };
+}
 import { existsSync } from 'fs';
 import * as path from 'path';
 
@@ -28,8 +39,8 @@ export const execTool: ToolDef = {
     try {
       const { stdout, stderr } = await execAsync(command, { cwd: workdir, timeout: 30000, maxBuffer: 1024 * 1024 });
       return { success: true, output: stdout || stderr || '(无输出)', durationMs: Date.now() - start };
-    } catch (err: any) {
-      return { success: false, output: err.stdout || '', error: err.stderr || err.message, durationMs: Date.now() - start };
+    } catch (err: unknown) {
+      return { success: false, output: execErrorOutput(err).stdout, error: execErrorOutput(err).stderr || errorMessage(err), durationMs: Date.now() - start };
     }
   },
 };
@@ -52,8 +63,8 @@ export const writeFileTool: ToolDef = {
       }
       await writeFile(filePath, content, 'utf-8');
       return { success: true, output: `文件已写入: ${filePath} (${content.length} 字节)`, durationMs: Date.now() - start };
-    } catch (err: any) {
-      return { success: false, output: '', error: err.message, durationMs: Date.now() - start };
+    } catch (err: unknown) {
+      return { success: false, output: '', error: errorMessage(err), durationMs: Date.now() - start };
     }
   },
 };
@@ -75,8 +86,8 @@ export const readFileTool: ToolDef = {
         output: content.length > 5000 ? content.slice(0, 5000) + `\n...(截断，共 ${content.length} 字)` : content,
         durationMs: Date.now() - start,
       };
-    } catch (err: any) {
-      return { success: false, output: '', error: err.message, durationMs: Date.now() - start };
+    } catch (err: unknown) {
+      return { success: false, output: '', error: errorMessage(err), durationMs: Date.now() - start };
     }
   },
 };
@@ -101,8 +112,8 @@ export const webSearchTool: ToolDef = {
       const output = snippets.slice(0, 5).map((s, i) =>
         `${i + 1}. ${s.replace(/class="result__snippet">/, '').replace(/<[^>]+>/g, '')}`).join('\n');
       return { success: true, output, durationMs: Date.now() - start };
-    } catch (err: any) {
-      return { success: false, output: '', error: err.message, durationMs: Date.now() - start };
+    } catch (err: unknown) {
+      return { success: false, output: '', error: errorMessage(err), durationMs: Date.now() - start };
     }
   },
 };

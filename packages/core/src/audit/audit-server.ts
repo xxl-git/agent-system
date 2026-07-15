@@ -3,6 +3,14 @@ import * as http from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+
 const PORT = 19700;
 const AUDIT_DIR = path.resolve(__dirname, '..', '..', 'audit');
 const DASHBOARD = path.resolve(__dirname, '..', '..', 'audit-dashboard.html');
@@ -109,9 +117,9 @@ const server = http.createServer((req, res) => {
       const events = loadAuditEvents();
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(computeStats(events)));
-    } catch (err: any) {
+    } catch (err: unknown) {
       res.writeHead(500);
-      res.end(JSON.stringify({ error: err.message }));
+      res.end(JSON.stringify({ error: errorMessage(err) }));
     }
     return;
   }
@@ -127,9 +135,9 @@ const server = http.createServer((req, res) => {
       const slice = events.slice(offset, offset + limit);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ events: slice, total: events.length, offset, limit }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       res.writeHead(500);
-      res.end(JSON.stringify({ error: err.message }));
+      res.end(JSON.stringify({ error: errorMessage(err) }));
     }
     return;
   }

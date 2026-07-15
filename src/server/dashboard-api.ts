@@ -5,6 +5,12 @@ import { getConfig } from '@agent-system/core';
 import { logger } from '@agent-system/core';
 import { getContextManager } from '@agent-system/core';
 
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 // 动态读取 package.json 版本
 let _cachedVersion: string = '0.9.2';
 let _versionLoaded = false;
@@ -80,8 +86,8 @@ export function getProjectsSummary(): any {
 
     const active = projects.find(p => p.isActive) || null;
     return { projects, total: projects.length, active };
-  } catch (err: any) {
-    return { projects: [], total: 0, active: null, error: err.message };
+  } catch (err: unknown) {
+    return { projects: [], total: 0, active: null, error: errorMessage(err) };
   }
 }
 
@@ -136,8 +142,8 @@ export function getSkillsSummary(): any {
       totalInstalled: installedSkills.length,
       gaps: []
     };
-  } catch (err: any) {
-    return { registered: [], pendingApplies: [], totalInstalled: 0, gaps: [], error: err.message };
+  } catch (err: unknown) {
+    return { registered: [], pendingApplies: [], totalInstalled: 0, gaps: [], error: errorMessage(err) };
   }
 }
 
@@ -177,8 +183,8 @@ export function getAuditSummary(): any {
       today,
       recentEvents: recentEvents.slice(-10),
     };
-  } catch (err: any) {
-    return { totalEvents: 0, successRate: 0, recentEvents: [], error: err.message };
+  } catch (err: unknown) {
+    return { totalEvents: 0, successRate: 0, recentEvents: [], error: errorMessage(err) };
   }
 }
 
@@ -200,8 +206,8 @@ export async function getModelSummary(agent?: any): Promise<any> {
       const lmData: any = await lmRes.json();
       const loadedModels = lmData.data || [];
       currentModelOnline = loadedModels.some((m: any) => m.id === model);
-    } catch (e: any) {
-      onlineCheckError = e.message || 'unknown';
+    } catch (e: unknown) {
+      onlineCheckError = errorMessage(e) || 'unknown';
     }
 
     return {
@@ -213,8 +219,8 @@ export async function getModelSummary(agent?: any): Promise<any> {
       profile,
       strategy: agent?.getCapStrategy ? agent.getCapStrategy() : 'auto',
     };
-  } catch (err: any) {
-    return { currentModel: 'unknown', currentModelOnline: false, error: err.message };
+  } catch (err: unknown) {
+    return { currentModel: 'unknown', currentModelOnline: false, error: errorMessage(err) };
   }
 }
 
@@ -232,8 +238,8 @@ export function getHealthSummary(agent?: any): any {
       failureCount: health?.failureCount || 0,
       lastFailure: health?.lastFailure || null,
     };
-  } catch (err: any) {
-    return { circuitBreakerState: 'unknown', error: err.message };
+  } catch (err: unknown) {
+    return { circuitBreakerState: 'unknown', error: errorMessage(err) };
   }
 }
 
@@ -253,8 +259,8 @@ export function getMemorySummary(agent?: any): any {
       memoryFileCount: fileCount,
       sessionId: agent?.sessionId || '-',
     };
-  } catch (err: any) {
-    return { memoryFileCount: 0, sessionId: '-', error: err.message };
+  } catch (err: unknown) {
+    return { memoryFileCount: 0, sessionId: '-', error: errorMessage(err) };
   }
 }
 
@@ -265,8 +271,8 @@ export function getToolsSummary(agent?: any): any {
       return agent.getToolRegistryInfo();
     }
     return null;
-  } catch (err: any) {
-    return { error: err.message };
+  } catch (err: unknown) {
+    return { error: errorMessage(err) };
   }
 }
 
@@ -289,8 +295,8 @@ export function getContextSummary(): any {
       effectiveWindow,
       compressionTrigger: `超过 ${(stats.config?.compressionThreshold || 0.75) * 100}% 预算时触发，预算=${stats.config?.maxTokens || 4000}`,
     };
-  } catch (err: any) {
-    return { enabled: false, error: err.message };
+  } catch (err: unknown) {
+    return { enabled: false, error: errorMessage(err) };
   }
 }
 
@@ -392,8 +398,8 @@ export function getFileListing(dir: string = ''): any {
       entries: files,
       total: files.length,
     };
-  } catch (err: any) {
-    return { error: err.message, entries: [] };
+  } catch (err: unknown) {
+    return { error: errorMessage(err), entries: [] };
   }
 }
 
@@ -428,8 +434,8 @@ export function getResilienceSummary(agent?: any): any {
       pendingTasks: agent?.checkpointMgr?.listPendingTasks?.() ?? [],
       pendingTaskCount: agent?.pendingTaskIds?.length ?? 0,
     };
-  } catch (err: any) {
-    return { error: err.message };
+  } catch (err: unknown) {
+    return { error: errorMessage(err) };
   }
 }
 

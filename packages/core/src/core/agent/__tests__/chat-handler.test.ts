@@ -2,6 +2,14 @@
 import * as path from 'path';
 
 // 类型定义
+
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
@@ -47,8 +55,8 @@ class TestChatHandler {
       }
       
       return content;
-    } catch (err: any) {
-      if (err.message?.includes('timeout')) {
+    } catch (err: unknown) {
+      if (errorMessage(err)?.includes('timeout')) {
         throw new Error('llm_timeout');
       }
       throw err;
@@ -123,12 +131,12 @@ async function testHandleMethod() {
       await handler2.handle('Test');
       console.log('  ❌ 应抛出 model_unreachable 错误');
       failed++;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err.message === 'model_unreachable') {
         console.log('  ✅ 模型不可达时抛出正确错误');
         passed++;
       } else {
-        console.log(`  ❌ 错误消息不匹配: ${err.message}`);
+        console.log(`  ❌ 错误消息不匹配: ${errorMessage(err)}`);
         failed++;
       }
     }
@@ -146,12 +154,12 @@ async function testHandleMethod() {
       await handler3.handle('Test');
       console.log('  ❌ 应抛出 empty_response 错误');
       failed++;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err.message === 'empty_response') {
         console.log('  ✅ 空响应时抛出正确错误');
         passed++;
       } else {
-        console.log(`  ❌ 错误消息不匹配: ${err.message}`);
+        console.log(`  ❌ 错误消息不匹配: ${errorMessage(err)}`);
         failed++;
       }
     }
@@ -199,12 +207,12 @@ async function testHandleStreamMethod() {
       await handler2.handleStream('Test');
       console.log('  ❌ 应抛出 model_unreachable 错误');
       failed++;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err.message === 'model_unreachable') {
         console.log('  ✅ 流式聊天模型不可达时正确处理');
         passed++;
       } else {
-        console.log(`  ❌ 错误消息不匹配: ${err.message}`);
+        console.log(`  ❌ 错误消息不匹配: ${errorMessage(err)}`);
         failed++;
       }
     }
@@ -240,12 +248,12 @@ async function testErrorHandling() {
       await handler1.handle('Timeout test');
       console.log('  ❌ 应抛出超时错误');
       failed++;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err.message === 'llm_timeout') {
         console.log('  ✅ LLM 超时正确处理');
         passed++;
       } else {
-        console.log(`  ❌ 错误消息不匹配: ${err.message}`);
+        console.log(`  ❌ 错误消息不匹配: ${errorMessage(err)}`);
         failed++;
       }
     }

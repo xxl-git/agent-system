@@ -38,7 +38,15 @@ import logger from '../../logger';
 import { getTracer, finishTrace, createAssemblyReport, addAssemblyStage, formatAssemblyReport, getAssemblyReport } from '@agent-system/resilience';
 import { ChatHandler, createChatHandlerFromAgentCore } from './chat-handler';
 import { AgentCommandHandler, createCommandHandlerFromAgentCore } from './command-handler';
-import { TaskHandler, createTaskHandlerFromAgentCore } from './task-handler';
+import { TaskHandler, createTaskHandlerFromAgentCo
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+re } from './task-handler';
 
 class AgentCore {
     adapter;
@@ -456,9 +464,9 @@ class AgentCore {
                 intent = await this.intentParser.parse(userInput);
                 logger.info(`[Agent] │ ├─ 意图解析完成 (${Date.now() - intentT0}ms): type=${intent.type} confidence=${intent.confidence} entities=[${(intent.entities || []).map((e: any) => e.name || e).join(', ')}]`);
             }
-            catch (err: any) {
+            catch (err: unknown) {
                 intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.3, needsClarification: false, missingInfo: [] };
-                logger.warn(`[Agent] │ ├─ 意图解析失败: ${err.message}，降级为 unknown`);
+                logger.warn(`[Agent] │ ├─ 意图解析失败: ${errorMessage(err)}，降级为 unknown`);
             }
         }
 
@@ -747,9 +755,9 @@ class AgentCore {
             try {
                 intent = await this.intentParser.parse(userInput);
                 logger.info(`[Agent] │ ├─ 意图解析完成 (${Date.now() - intentT0}ms): type=${intent.type} confidence=${intent.confidence}`);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.3, needsClarification: false, missingInfo: [] };
-                logger.warn(`[Agent] │ ├─ 意图解析失败: ${err.message}，降级为 unknown`);
+                logger.warn(`[Agent] │ ├─ 意图解析失败: ${errorMessage(err)}，降级为 unknown`);
             }
         }
         agentEventBus.stepDone(1, 'intent_ready', '意图: ' + (intent.type || 'unknown'));
@@ -2295,8 +2303,8 @@ class AgentCore {
 
                     logger.info(`[MemoryOrg] ✅ 归档完成: ${archivedCount} 个文件, ${(totalSizeArchived / 1024).toFixed(1)} KB`);
                     return false; // 保留在队列中持续运行
-                } catch (err: any) {
-                    logger.warn(`[MemoryOrg] ❌ 归档失败: ${err.message}`);
+                } catch (err: unknown) {
+                    logger.warn(`[MemoryOrg] ❌ 归档失败: ${errorMessage(err)}`);
                     return false; // 失败不退出队列
                 }
             },
@@ -2352,8 +2360,8 @@ class AgentCore {
                             resolve(false);
                         });
                     });
-                } catch (err: any) {
-                    logger.debug(`[TaskMonitor] 检查失败: ${err.message}`);
+                } catch (err: unknown) {
+                    logger.debug(`[TaskMonitor] 检查失败: ${errorMessage(err)}`);
                     return false;
                 }
             },
@@ -2381,8 +2389,8 @@ class AgentCore {
                         logger.debug('[SessionGC] summarizer.gc 不可用，跳过');
                     }
                     return false; // 保留在队列中持续运行
-                } catch (err: any) {
-                    logger.debug(`[SessionGC] GC 失败: ${err.message}`);
+                } catch (err: unknown) {
+                    logger.debug(`[SessionGC] GC 失败: ${errorMessage(err)}`);
                     return false;
                 }
             },

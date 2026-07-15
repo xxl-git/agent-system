@@ -74,6 +74,12 @@ export interface StreamWriters {
   onClose: () => void;
 }
 
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 /** 创建并注册所有路由 */
 export function createRouter(deps: RouteDeps): Router {
   const router = new Router();
@@ -299,8 +305,7 @@ export function createRouter(deps: RouteDeps): Router {
       // sessionStore.createSession 已由 deps 提供
       const session = deps.createSession(title);
       sendJson(ctx.res, session);
-    } catch (err: any) {
-      sendError(ctx.res, err.message, 500);
+    } catch (err: unknown) { sendError(ctx.res, errorMessage(err), 500);
     }
   });
 
@@ -323,8 +328,7 @@ export function createRouter(deps: RouteDeps): Router {
       if (title) deps.renameSession(ctx.params.id, title);
       if (messages) deps.updateMessages(ctx.params.id, messages);
       sendJson(ctx.res, { ok: true });
-    } catch (err: any) {
-      sendError(ctx.res, err.message, 500);
+    } catch (err: unknown) { sendError(ctx.res, errorMessage(err), 500);
     }
   });
 
@@ -332,8 +336,7 @@ export function createRouter(deps: RouteDeps): Router {
     try {
       deps.deleteSession(ctx.params.id);
       sendJson(ctx.res, { ok: true });
-    } catch (err: any) {
-      sendError(ctx.res, err.message, 500);
+    } catch (err: unknown) { sendError(ctx.res, errorMessage(err), 500);
     }
   });
 
@@ -345,8 +348,7 @@ export function createRouter(deps: RouteDeps): Router {
     try {
       const result = await deps.updateConfig(ctx.body || {});
       sendJson(ctx.res, { ok: true, message: '配置已更新，重启后生效', changes: result.changes });
-    } catch (err: any) {
-      sendError(ctx.res, err.message, 500);
+    } catch (err: unknown) { sendError(ctx.res, errorMessage(err), 500);
     }
   });
 
@@ -383,8 +385,7 @@ export function createRouter(deps: RouteDeps): Router {
         chainText: report.chainText,
         startedAt: report.startedAt,
       });
-    } catch (err: any) {
-      sendError(ctx.res, err.message, 500);
+    } catch (err: unknown) { sendError(ctx.res, errorMessage(err), 500);
     }
   });
 
@@ -402,8 +403,7 @@ export function createRouter(deps: RouteDeps): Router {
         chainText: report.chainText,
         startedAt: report.startedAt,
       });
-    } catch (err: any) {
-      sendError(ctx.res, err.message, 500);
+    } catch (err: unknown) { sendError(ctx.res, errorMessage(err), 500);
     }
   });
 
@@ -415,8 +415,7 @@ export function createRouter(deps: RouteDeps): Router {
         return;
       }
       sendJson(ctx.res, report);
-    } catch (err: any) {
-      sendError(ctx.res, err.message, 500);
+    } catch (err: unknown) { sendError(ctx.res, errorMessage(err), 500);
     }
   });
 
@@ -428,8 +427,7 @@ export function createRouter(deps: RouteDeps): Router {
         return;
       }
       sendJson(ctx.res, report);
-    } catch (err: any) {
-      sendError(ctx.res, err.message, 500);
+    } catch (err: unknown) { sendError(ctx.res, errorMessage(err), 500);
     }
   });
 
@@ -458,9 +456,10 @@ export function createRouter(deps: RouteDeps): Router {
         publisher: result.publisher || 'unknown',
         message: `模型已切换: ${result.previousModel} → ${result.currentModel}`,
       });
-    } catch (err: any) {
-      const status = err.message?.includes('未在 LM Studio') ? 404 : err.message?.includes('无法连接') ? 502 : 500;
-      sendError(ctx.res, err.message, status);
+    } catch (err: unknown) {
+      const msg = errorMessage(err);
+      const status = msg.includes('未在 LM Studio') ? 404 : msg.includes('无法连接') ? 502 : 500;
+      sendError(ctx.res, msg, status);
     }
   });
 
@@ -468,8 +467,8 @@ export function createRouter(deps: RouteDeps): Router {
     try {
       const result = await deps.scanModels();
       sendJson(ctx.res, result);
-    } catch (err: any) {
-      const errMsg = err.message || '';
+    } catch (err: unknown) {
+      const errMsg = errorMessage(err);
       const isConnectionRefused = errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch failed') || errMsg.includes('aggregateError');
       sendJson(ctx.res, {
         ok: false,
@@ -503,8 +502,7 @@ export function createRouter(deps: RouteDeps): Router {
         status: result.status,
         type: result.type,
       });
-    } catch (err: any) {
-      sendJson(ctx.res, { ok: false, error: err.message || '加载失败' });
+    } catch (err: unknown) { sendJson(ctx.res, { ok: false, error: errorMessage(err) || '加载失败' });
     }
   });
 
@@ -517,8 +515,7 @@ export function createRouter(deps: RouteDeps): Router {
       }
       const result = await deps.unloadModel(instance_id);
       sendJson(ctx.res, { ok: true, instance_id: result.instance_id });
-    } catch (err: any) {
-      sendJson(ctx.res, { ok: false, error: err.message || '卸载失败' });
+    } catch (err: unknown) { sendJson(ctx.res, { ok: false, error: errorMessage(err) || '卸载失败' });
     }
   });
 
@@ -542,8 +539,7 @@ export function createRouter(deps: RouteDeps): Router {
       const duration = Date.now() - t0;
       deps.broadcastSSE({ type: 'chat', input: message.slice(0, 100), output: reply.slice(0, 200), duration });
       sendJson(ctx.res, { reply, duration });
-    } catch (err: any) {
-      sendError(ctx.res, err.message, 500);
+    } catch (err: unknown) { sendError(ctx.res, errorMessage(err), 500);
     }
   });
 
@@ -611,10 +607,10 @@ export function createRouter(deps: RouteDeps): Router {
         ctx.res.write(`data: ${JSON.stringify({ type: 'done', fullReply, duration })}\n\n`);
         ctx.res.end();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       deps.streamChatInProgress.value = false;
       if (!ctx.res.writableEnded) {
-        ctx.res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
+        ctx.res.write(`data: ${JSON.stringify({ type: 'error', error: errorMessage(err) })}\n\n`);
         ctx.res.end();
       }
     }
@@ -635,8 +631,7 @@ export function createRouter(deps: RouteDeps): Router {
       const rawBody = Buffer.from(ctx.rawBody, 'utf8');
       const result = await deps.saveUpload(rawBody, contentType);
       sendJson(ctx.res, result);
-    } catch (err: any) {
-      sendError(ctx.res, err.message, 500);
+    } catch (err: unknown) { sendError(ctx.res, errorMessage(err), 500);
     }
   });
 

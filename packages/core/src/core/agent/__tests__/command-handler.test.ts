@@ -2,6 +2,14 @@
 import * as path from 'path';
 
 // 类型定义
+
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 interface CommandResult {
   success: boolean;
   output: string;
@@ -392,12 +400,12 @@ async function testErrorHandling() {
       await handler.handle('/invalid');
       console.log('  ❌ 应抛出异常');
       failed++;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err.message === 'Command validation failed') {
         console.log('  ✅ 命令异常正确抛出');
         passed++;
       } else {
-        console.log(`  ❌ 错误消息不匹配: ${err.message}`);
+        console.log(`  ❌ 错误消息不匹配: ${errorMessage(err)}`);
         failed++;
       }
     }

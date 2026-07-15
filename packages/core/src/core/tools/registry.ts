@@ -1,6 +1,14 @@
 // 工具注册表
 import type { ToolDef, ToolResult, ToolCallRecord } from './types';
 
+
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 export class ToolRegistry {
   private tools: Map<string, ToolDef> = new Map();
   private callHistory: ToolCallRecord[] = [];
@@ -44,8 +52,8 @@ export class ToolRegistry {
     let result: ToolResult;
     try {
       result = await tool.execute(args);
-    } catch (err: any) {
-      result = { success: false, output: '', error: err.message, durationMs: Date.now() - start };
+    } catch (err: unknown) {
+      result = { success: false, output: '', error: errorMessage(err), durationMs: Date.now() - start };
     }
 
     const record: ToolCallRecord = {

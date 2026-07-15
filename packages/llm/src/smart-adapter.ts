@@ -2,6 +2,15 @@
 import type { ChatMessage, ChatCompletionResponse, LMStudioAdapter } from './types';
 import { logger } from './logger';
 
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+function errorName(err: unknown): string {
+  if (err && typeof err === 'object' && 'name' in err) return String(err.name);
+  return '';
+}
+
 export interface SmartAdapterConfig {
   callTimeoutMs: number;
   maxRetries: number;
@@ -110,9 +119,10 @@ export class SmartAdapter {
         this.consecutiveEmpties = 0;
         return result;
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         lastError = err;
-        const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('abort');
+        const msg = errorMessage(err);
+        const isTimeout = errorName(err) === 'TimeoutError' || msg.includes('timeout') || msg.includes('abort');
         if (isTimeout) {
           localTimeouts++;
           if (localTimeouts >= this.config.emptyLoopThreshold) {
@@ -198,19 +208,20 @@ export class SmartAdapter {
   reset() { this.consecutiveEmpties = 0; this.consecutiveSimilar = 0; this.recentResponses = []; }
 
   async *chatStream(messages: ChatMessage[]): AsyncGenerator<string> {
-    let streamError: any = null;
+    let streamError: unknown = null;
     try {
       yield* this.raw.chatStream(messages);
-    } catch (err: any) {
+    } catch (err: unknown) {
       streamError = err;
     }
 
     if (streamError) {
-      const isNetwork = /ECONNREFUSED|ECONNRESET|fetch failed|network|connection/i.test(streamError.message || '');
+      const streamMsg = errorMessage(streamError);
+      const isNetwork = /ECONNREFUSED|ECONNRESET|fetch failed|network|connection/i.test(streamMsg);
 
       // 网络错误：重试 1 次
       if (isNetwork) {
-        logger.warn(`[SmartAdapter][stream] 网络错误，等待 3s 后重试非流式: ${streamError.message}`);
+        logger.warn(`[SmartAdapter][stream] 网络错误，等待 3s 后重试非流式: ${streamMsg}`);
         await this.sleep(3000);
         try {
           const result = await this.chat(messages);
@@ -222,14 +233,14 @@ export class SmartAdapter {
             }
             return;
           }
-        } catch (retryErr: any) {
-          logger.error(`[SmartAdapter][stream] 重试也失败: ${retryErr.message}`);
+        } catch (retryErr: unknown) {
+          logger.error(`[SmartAdapter][stream] 重试也失败: ${errorMessage(retryErr)}`);
         }
       }
 
       // 非网络错误或重试也失败：尝试非流式回退
       try {
-        logger.warn(`[SmartAdapter][stream] 流式失败，回退到非流式: ${streamError.message}`);
+        logger.warn(`[SmartAdapter][stream] 流式失败，回退到非流式: ${streamMsg}`);
         const result = await this.chat(messages);
         const content = result.choices?.[0]?.message?.content || '';
         if (content) {
@@ -239,8 +250,8 @@ export class SmartAdapter {
           }
           return;
         }
-      } catch (fallbackErr: any) {
-        logger.error(`[SmartAdapter][stream] 非流式回退也失败: ${fallbackErr.message}`);
+      } catch (fallbackErr: unknown) {
+        logger.error(`[SmartAdapter][stream] 非流式回退也失败: ${errorMessage(fallbackErr)}`);
       }
 
       // 所有回退失败，抛出原始错误

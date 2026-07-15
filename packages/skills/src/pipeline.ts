@@ -2,6 +2,14 @@ import type { SkillMeta, SkillApply, SkillAuditResult, SkillTestResult } from '.
 import { getRegistry } from './registry';
 import { logger } from './logger';
 
+
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 export class SkillAuditor {
   audit(application: SkillApply): SkillAuditResult {
     const registry = getRegistry();
@@ -27,7 +35,7 @@ export class SkillDeveloper {
     logger.info(`[Skill] 开始开发: ${application.name}`);
     const skillMeta: SkillMeta = { name: application.name, version: '0.1.0', description: application.expectedFunction, author: 'agent', dangerLevel: application.dangerLevel, capabilities: [{ name: application.expectedFunction, description: application.reason, inputType: 'string', outputType: 'any' }], dependencies: [], triggers: this.generateTriggers(application), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), stats: { totalCalls: 0, successCalls: 0, failCalls: 0, avgDurationMs: 0 }, status: 'testing' };
     try { registry.register(skillMeta); logger.info(`[Skill] ${application.name} 已进入测试阶段`); return { success: true, skillMeta }; }
-    catch (err: any) { return { success: false, error: err.message }; }
+    catch (err: unknown) { return { success: false, error: errorMessage(err) }; }
   }
   private generateTriggers(app: SkillApply): string[] {
     const words = app.expectedFunction.split(/[\s,，、]+/).filter(Boolean);

@@ -4,6 +4,14 @@ import { logger } from './logger';
 import * as fs from 'fs';
 import * as path from 'path';
 
+
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 export type IdleTaskPriority = 'P0' | 'P1' | 'P2';
 
 export interface IdleTask {
@@ -116,12 +124,12 @@ export class IdleTaskManager {
             this.tasks = this.tasks.filter(t => t.id !== task.id);
             logger.info(`[IdleTask] ✅ ${task.name} 完成`);
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           success = false;
-          result = `错误: ${err.message}`;
+          result = `错误: ${errorMessage(err)}`;
           task.failCount++;
           task.lastRun = now;
-          logger.warn(`[IdleTask] ❌ ${task.name} 失败 (${task.failCount}/${task.maxFails}): ${err.message}`);
+          logger.warn(`[IdleTask] ❌ ${task.name} 失败 (${task.failCount}/${task.maxFails}): ${errorMessage(err)}`);
 
           if (task.failCount >= task.maxFails) {
             this.tasks = this.tasks.filter(t => t.id !== task.id);

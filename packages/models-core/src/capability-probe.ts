@@ -1,6 +1,14 @@
 ﻿import type { Probe, ProbeCategory } from './probes';
 import { STANDARD_PROBES } from './probes';
-import type { ChatMessage } from './chat-stub';
+import type { ChatMessage } f
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+rom './chat-stub';
 import { logger } from './logger';
 
 export interface ProbeResult {
@@ -54,9 +62,9 @@ export class CapabilityProbe {
       const passed = probe.judge(content || reasoningContent);
       return { probeId: probe.id, category: probe.category, passed,
         durationMs: Date.now() - start, response: (content || reasoningContent).slice(0, 200) };
-    } catch (err: any) {
+    } catch (err: unknown) {
       return { probeId: probe.id, category: probe.category, passed: false,
-        durationMs: Date.now() - start, response: '', error: err.message };
+        durationMs: Date.now() - start, response: '', error: errorMessage(err) };
     }
   }
 

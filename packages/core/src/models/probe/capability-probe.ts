@@ -5,6 +5,14 @@ import { STANDARD_PROBES } from './probes';
 import type { ChatMessage } from '../adapters/lmstudio';
 import logger from '../../logger';
 
+
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 export interface ProbeResult {
   probeId: string;
   category: ProbeCategory;
@@ -130,15 +138,15 @@ export class CapabilityProbe {
         durationMs: duration,
         response: fullResponse.slice(0, 200),
       };
-    } catch (err: any) {
-      logger.warn(`[Probe] ❌ #${index + 1} ${probe.id} error: ${err.message} (${Date.now() - start}ms)`);
+    } catch (err: unknown) {
+      logger.warn(`[Probe] ❌ #${index + 1} ${probe.id} error: ${errorMessage(err)} (${Date.now() - start}ms)`);
       return {
         probeId: probe.id,
         category: probe.category,
         passed: false,
         durationMs: Date.now() - start,
         response: '',
-        error: err.message,
+        error: errorMessage(err),
       };
     }
   }

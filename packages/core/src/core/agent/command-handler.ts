@@ -41,7 +41,15 @@ import { getMemoryStore } from '@agent-system/memory';
 import { getCheckpointManager } from '@agent-system/resilience';
 import { getHealthMonitor } from '@agent-system/resilience';
 import { getCircuitBreaker } from '@agent-system/resilience';
-import { getExperienceStore, getExperienceExtractor, getExperienceRetriever, getExperienceCommandHandler } from '@agent-system/experience';
+import { getExperienceStore, getExperienceExtractor, getExperienceRetriever, getExperienceCommandHandler } from '@
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+agent-system/experience';
 import { getNonsenseDetector } from '@agent-system/resilience';
 import { getSessionDiagnostics } from '@agent-system/resilience';
 import { getIdleTaskManager } from '@agent-system/resilience';
@@ -485,8 +493,8 @@ export class AgentCommandHandler {
             report += 'Next: ' + output.nextSteps.join('; ');
           
           return report;
-        } catch (err: any) {
-          return 'Summarization failed: ' + err.message;
+        } catch (err: unknown) {
+          return 'Summarization failed: ' + errorMessage(err);
         }
       }
       
@@ -594,8 +602,8 @@ export class AgentCommandHandler {
           return 'Memory reloaded: ' + 
                  injection.recentDecisions.length + ' decisions, ' + 
                  injection.trackedEntities.length + ' entities';
-        } catch (err: any) {
-          return 'Memory reload failed: ' + err.message;
+        } catch (err: unknown) {
+          return 'Memory reload failed: ' + errorMessage(err);
         }
       }
       

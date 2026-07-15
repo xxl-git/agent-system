@@ -2,7 +2,15 @@
 // 独立上下文、独立模型参数、限时运行
 import type { ChatMessage } from '../models/adapters/lmstudio';
 import { LMStudioAdapter } from '../models/adapters/lmstudio';
-import { getLLMRouter } from '@agent-system/llm';
+import { getLLMRouter } from '@agent-system/l
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+lm';
 import logger from '../logger';
 
 export interface SubAgentConfig {
@@ -79,14 +87,14 @@ export class SubAgent {
         durationMs: Date.now() - start,
         tokensUsed: response.usage?.total_tokens,
       };
-    } catch (err: any) {
-      logger.warn(`[SubAgent] ❌ ${this.config.name}: ${err.message}`);
+    } catch (err: unknown) {
+      logger.warn(`[SubAgent] ❌ ${this.config.name}: ${errorMessage(err)}`);
       return {
         agentName: this.config.name,
         success: false,
         output: '',
         durationMs: Date.now() - start,
-        error: err.message,
+        error: errorMessage(err),
       };
     }
   }

@@ -7,6 +7,14 @@
 import { getConfig } from '../../config';
 import logger from '../../logger';
 
+
+/** 从 unknown 错误中提取 message */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -181,7 +189,7 @@ export class LMStudioAdapter {
     // reasoning 已设置（且不是 off）且 v1 尚未被标记为不支持 → 尝试 v1 API
     try {
       return await this.chatV1(messages);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 如果 v1 失败是因为 reasoning 参数不支持，禁用 v1 并降级
       const errMsg = err?.message || '';
       if (errMsg.includes('reasoning') || errMsg.includes('reasoning configuration')) {
