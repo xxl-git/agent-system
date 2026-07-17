@@ -44,6 +44,7 @@ jobs:
           npx ts-node packages/resilience/src/__tests__/idle-task-manager.test.ts
           npx ts-node packages/skills/src/__tests__/skills.test.ts
           npx ts-node packages/tools/src/__tests__/tools.test.ts
+          npx ts-node packages/core/src/core/agent/__tests__/entity-extractor.test.ts
 
       - name: Security audit
         run: npm audit --audit-level=moderate

@@ -147,7 +147,9 @@ async function ensureAgent(): Promise<AgentCore> {
 // ─── SSE 事件推送 ───
 const sseClients = new Set<http.ServerResponse>();
 
-function broadcastSSE(data: any) {
+type SSEData = Record<string, unknown>;
+
+function broadcastSSE(data: SSEData) {
   const msg = `data: ${JSON.stringify(data)}\n\n`;
   for (const c of sseClients) {
     try { c.write(msg); } catch { sseClients.delete(c); }
@@ -173,7 +175,7 @@ const routeDeps: RouteDeps = {
     try {
       const logDir = path.join(process.cwd(), 'logs');
       const files = fs.readdirSync(logDir).filter(f => f.includes('error') && f.endsWith('.log'));
-      const errors: any[] = [];
+      const errors: Record<string, unknown>[] = [];
       for (const f of files.slice(-3)) {
         const content = fs.readFileSync(path.join(logDir, f), 'utf8');
         const lines = content.split('\n').filter(Boolean).slice(-limit);

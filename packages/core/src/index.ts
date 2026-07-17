@@ -3,6 +3,8 @@
 // The workspace root project uses these files directly (not via this package).
 // This package is for: 1) external consumers, 2) server package.
 export { AgentCore } from './core/agent/agent-core';
+export { extractEntities } from './core/agent/entity-extractor';
+export type { Entity } from './core/agent/entity-extractor';
 export type { ContextManager } from './core/context-manager';
 export { getContextManager } from './core/context-manager';
 export { Orchestrator } from './core/orchestrator';

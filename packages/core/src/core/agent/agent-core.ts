@@ -1,4 +1,4 @@
-﻿// Agent 核心循环 — Phase 5 升级版
+// Agent 核心循环 — Phase 5 升级版
 // 集成: 意图解析 + 任务编排 + 工具 + 记忆 + 项目 + 智能路由 + 磨合 + 技能生态 + 多Agent + 韧性保障
 import { agentEventBus } from '@agent-system/events';
 import * as lmstudio_1 from '../../models/adapters/lmstudio';
@@ -2044,61 +2044,7 @@ class AgentCore {
 
     /** 从文本中提取命名实体（简单正则，无 LLM 依赖） */
     private extractEntities(text: string): Array<{ name: string; type: string }> {
-        const seen = new Set<string>();
-        const results: Array<{ name: string; type: string }> = [];
-
-        // 1. 路径实体: D:\xxx, /path, ./xxx
-        const pathMatches = text.match(/[A-Za-z]:\\[\w\-.\/\\]+|[.\/][\w\-./\\]+/g) || [];
-        for (const p of pathMatches) {
-            const name = p.slice(0, 60);
-            if (seen.has(name)) continue;
-            seen.add(name);
-            results.push({ name, type: 'path' });
-        }
-
-        // 2. 引号中的短语: "xxx", 'xxx'
-        const quotedMatches = text.match(/["'][^\n"']{2,50}["']/g) || [];
-        for (const q of quotedMatches) {
-            const name = q.slice(1, -1).trim();
-            if (seen.has(name) || name.length < 2) continue;
-            seen.add(name);
-            results.push({ name, type: 'quoted_phrase' });
-        }
-
-        // 3. @-mentioned 标识符: @something
-        const atMatches = text.match(/@[a-zA-Z_][\w\-_]{1,30}/g) || [];
-        for (const m of atMatches) {
-            const name = m.slice(1);
-            if (seen.has(name)) continue;
-            seen.add(name);
-            results.push({ name, type: 'mention' });
-        }
-
-        // 4. 大写英文词组 (假设为专有名词): Word Word Word
-        const capMatches = text.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,4}\b/g) || [];
-        for (const w of capMatches) {
-            if (seen.has(w) || w.length < 4) continue;
-            seen.add(w);
-            results.push({ name: w, type: 'proper_noun' });
-        }
-
-        // 5. 邮箱
-        const emailMatches = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) || [];
-        for (const e of emailMatches) {
-            if (seen.has(e)) continue;
-            seen.add(e);
-            results.push({ name: e, type: 'email' });
-        }
-
-        // 6. URL
-        const urlMatches = text.match(/https?:\/\/[^\s"'<>]{5,100}/g) || [];
-        for (const u of urlMatches) {
-            if (seen.has(u)) continue;
-            seen.add(u);
-            results.push({ name: u.slice(0, 60), type: 'url' });
-        }
-
-        return results.slice(0, 20); // 最多 20 个
+        return extractEntitiesFn(text);
     }
 
     // ====== Phase 5: 恢复结果格式化 ======

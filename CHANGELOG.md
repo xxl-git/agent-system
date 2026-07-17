@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `nonsense-detector.test.ts` (12 tests) — gibberish detection + conversation lifecycle
   - `circuit-breaker-unit.test.ts` (15 tests) — circuit breaker state machine (CLOSED/OPEN/HALF_OPEN)
   - `idle-task-manager.test.ts` (12 tests) — task registration, cooldown, maxFails removal
+- **`entity-extractor.ts` module extracted from `agent-core.ts`** (48 lines removed)
+  - 12 new unit tests covering path/quote/mention/proper-noun/email/url extraction + dedup + maxEntities limit
 - CORS origin allowlist configuration (`server.cors.allowedOrigins` in `agent-system.yaml`)
 
 ### Changed
@@ -27,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Root directory `.md` files: 18 → 4 (README, HANDOVER, PLAN, CHANGELOG)
 - Test coverage: 17% → 20% (20 test files / 100 source files)
 - `test:units` script and CI workflow updated to include 3 new test files
+- **Type safety: all 50+ `catch (err: any)` → `catch (err: unknown)`** across 23 files
+  - Added `errorMessage(err: unknown)` helper in modified files
+  - Added `execErrorOutput(err: unknown)` helper in `base-tools.ts` for child_process errors
+  - `smart-adapter.ts`: `streamError: any` → `streamError: unknown`, added `errorName()` helper
 
 ### Fixed
 - Removed all 13 `@ts-nocheck` directives (4 source + 9 test files)
