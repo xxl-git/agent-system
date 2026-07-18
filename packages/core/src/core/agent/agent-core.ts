@@ -22,7 +22,6 @@ import * as health_monitor_1 from '@agent-system/resilience';
 import * as circuit_breaker_1 from '@agent-system/resilience';
 import * as checkpoint_1 from '@agent-system/resilience';
 import * as session_recovery_1 from '@agent-system/memory';
-import * as summarizer_1 from '@agent-system/memory';
 import * as audit_log_1 from '../../audit/audit-log';
 import * as context_manager_1 from '../context-manager';
 import * as idle_task_manager_1 from '@agent-system/resilience';
@@ -32,10 +31,8 @@ import * as agent_system_config_1 from '../../config/agent-system-config';
 import * as prompts_1 from '@agent-system/prompts';
 import * as experience_1 from '@agent-system/experience';
 import { toolRegistry } from '@agent-system/tools';
-import * as fs from 'fs';
 import * as path from 'path';
 import logger from '../../logger';
-import { getTracer, finishTrace, createAssemblyReport, addAssemblyStage, formatAssemblyReport, getAssemblyReport } from '@agent-system/resilience';
 import { ChatHandler, createChatHandlerFromAgentCore } from './chat-handler';
 import { AgentCommandHandler, createCommandHandlerFromAgentCore } from './command-handler';
 import { TaskHandler, createTaskHandlerFromAgentCo

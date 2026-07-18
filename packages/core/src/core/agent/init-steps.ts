@@ -3,10 +3,10 @@
 // 将 153 行的 init() 拆分为 7 个独立步骤，提高可测试性
 
 import * as path from 'path';
-import * as file_store_1 from '../../memory/file-store';
-import * as db_store_1 from '../../memory/db-store';
-import * as llm_router_1 from '../../llm/llm-router';
-import * as summarizer_1 from '../../memory/summarizer';
+import * as file_store_1 from '@agent-system/memory';
+import * as db_store_1 from '@agent-system/memory';
+import * as llm_router_1 from '@agent-system/llm';
+import * as summarizer_1 from '@agent-system/memory';
 import logger from '../../logger';
 
 /** 错误信息提取 */
