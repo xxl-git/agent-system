@@ -211,125 +211,31 @@ class AgentCore {
     async init() {
         logger.info('[Agent] ====== 初始化开始 ======');
         const initStart = Date.now();
-        // Step 0: 配置已在构造函数中加载，跳过
-        // Step 1: 初始化文件记忆存储（必须早于 recordInteraction）
-        try {
-            file_store_1.initMemoryStore(path.join(process.cwd(), 'memory'));
-            logger.debug('[Agent] 文件记忆存储已初始化');
-        }
-        catch (err) {
-            logger.warn('[Agent] 文件记忆初始化失败', err);
-        }
-        // Step 1a: 裁剪过期文件记忆
-        try {
-            const memStore = file_store_1.getMemoryStore();
-            const pruned = memStore.prune(30);
-            if (pruned > 0) {
-                logger.info(`[Agent] 裁剪了 ${pruned} 个过期记忆文件`);
-            }
-        }
-        catch (err) {
-            logger.warn('[Agent] 文件记忆裁剪失败', err);
-        }
-        // Step 1b: 清理过期日志 + 归档大日志文件
-        try {
-            const cleaned = logger.cleanupOldLogs();
-            if (cleaned > 0) {
-                logger.info(`[Agent] 清理/归档了 ${cleaned} 个旧日志文件`);
-            }
-        }
-        catch (err) {
-            logger.warn('[Agent] 日志清理失败', err);
-        }
-        // Step 2: 检测待恢复的长任务检查点（不再清除，支持跨会话恢复）
-        try {
-            const pendingTasks = this.checkpointMgr.listPendingTasks();
-            if (pendingTasks.length > 0) {
-                logger.info(`[Agent] 检测到 ${pendingTasks.length} 个待恢复的长任务检查点`);
-                logger.info('[Agent] ' + this.checkpointMgr.recoverySummary());
-                this.pendingTaskIds = pendingTasks;
-            } else {
-                this.pendingTaskIds = [];
-            }
-        }
-        catch (err) {
-            logger.warn('[Agent] 检查点检测失败', err);
-            this.pendingTaskIds = [];
-        }
-        // Step 3: 初始化数据库（记忆恢复依赖 DB）
-        logger.info('[Agent] Step 3/7: 初始化数据库...');
-        try {
-            const t0 = Date.now();
-            const db = db_store_1.getDBStore();
-            await db.init();
-            db.startSession(this.sessionId);
-            this.dbInitialized = true;
-            logger.info(`[Agent] 数据库已初始化 (${Date.now() - t0}ms): ${this.sessionId}`);
-        }
-        catch (err) {
-            logger.warn('[Agent] DB init failed', err);
-        }
-        // Step 4: 恢复跨会话记忆（DB + 文件层，此时均已就绪）
-        logger.info('[Agent] Step 4/7: 恢复跨会话记忆...');
-        let memoryBlock = '';
-        let memRecoveryTime = 0;
-        try {
-            const t0 = Date.now();
-            this.lastMemoryInjection = this.sessionRecoverer.recover();
-            memRecoveryTime = Date.now() - t0;
-            logger.info(`[Agent] 记忆恢复完成 (${memRecoveryTime}ms): ${this.lastMemoryInjection.recentDecisions.length} 条决策, ${this.lastMemoryInjection.trackedEntities.length} 个实体, ${this.lastMemoryInjection.recentSummaries.length} 条摘要`);
-        }
-        catch (err) {
-            logger.warn('[Agent] memory recovery failed', err);
-        }
+
+        // Step 1: 文件记忆 + 裁剪 + 日志清理
+        initSteps.initMemoryStore();
+
+        // Step 2: 检测待恢复的长任务检查点
+        initSteps.initCheckpoints(this);
+
+        // Step 3: 初始化数据库
+        await initSteps.initDatabase(this);
+
+        // Step 4: 恢复跨会话记忆
+        initSteps.initMemoryRecovery(this);
+
         // Step 5: 初始化摘要引擎
-        logger.info('[Agent] Step 5/7: 初始化摘要引擎...');
-        try {
-            this.summarizer = summarizer_1.getSummarizer({
-                useLLM: true,
-                chatFn: async (prompt) => {
-                    const resp = await llm_router_1.getLLMRouter().call({
-                        taskType: 'summarize',
-                        messages: [{ role: 'user', content: prompt }],
-                    });
-                    return resp.choices?.[0]?.message?.content || '';
-                },
-            });
-            logger.info('[Agent] 摘要引擎已初始化 (LLM模式)');
-            if (this.lastMemoryInjection && this.lastMemoryInjection.systemPromptBlock) {
-                memoryBlock = '\n\n[CONTEXT FROM PAST SESSIONS]\n' + this.lastMemoryInjection.systemPromptBlock;
-                logger.info(`[Agent] 注入 memory block: ${this.lastMemoryInjection.systemPromptBlock.length} 字`);
-            }
-        }
-        catch (err) {
-            logger.warn('[Agent] 摘要引擎初始化失败', err);
-        }
+        const memoryBlock = initSteps.initSummarizer(this);
+
         // Step 5.5: 初始化经验模块
-        try {
-            await this.experienceStore.init();
-            this.experienceInitialized = true;
-            const expStats = this.experienceStore.getStats();
-            logger.info(`[Agent] 经验模块已初始化: ${expStats.total} 条经验 (active=${expStats.active}, patterns=${expStats.patterns}, pitfalls=${expStats.pitfalls})`);
-        }
-        catch (err) {
-            logger.warn('[Agent] 经验模块初始化失败（非阻塞）', err);
-        }
-        // Step 6: 初始化 system message（Phase 2-3: 使用 PromptRegistry + 动态变量插值）
-        const identityVars = this.getIdentityVars();
-        const identityTpl = this.promptRegistry.get('agent.identity', identityVars);
-        const identityContent = identityTpl.system || 'You are an intelligent Agent assistant. Reply concisely and directly.';
-        this.messages = [{ role: 'system', content: identityContent }];
-        // 缓存 memoryBlock 供 handleChat 的 assembler 使用（不再塞进 system）
-        if (this.lastMemoryInjection && this.lastMemoryInjection.systemPromptBlock) {
-            this._cachedMemoryBlock = this.lastMemoryInjection.systemPromptBlock;
-            logger.info(`[Agent] 记忆块已缓存（将由 PromptAssembler 以 user 角色注入）: ${this._cachedMemoryBlock.length} 字`);
-        }
-        logger.info('[Agent] Step 6/7: System message 已设置（via PromptRegistry）');
+        await initSteps.initExperience(this);
+
+        // Step 6: 初始化 system message
+        initSteps.initSystemMessage(this, memoryBlock);
+
         // Step 7: 模型上线探测
-        logger.info('[Agent] Step 7/7: 模型上线探测...');
-        const modelT0 = Date.now();
-        const onboardResult = await this.onboardModel();
-        logger.info(`[Agent] 模型探测完成 (${Date.now() - modelT0}ms): ${onboardResult.replace(/\n/g, ' | ')}`);
+        const onboardResult = await initSteps.initModel(this);
+
         // 初始化完成汇总
         const recovery = this.projectManager.recoverySummary();
         const ckptRecovery = this.checkpointMgr.recoverySummary();
@@ -337,28 +243,29 @@ class AgentCore {
         let base = recovery ? onboardResult + skillsMsg + '\n\n' + recovery : onboardResult + skillsMsg;
         if (ckptRecovery !== 'No pending recovery tasks')
             base += '\n\n' + ckptRecovery;
-        // 会话诊断 + 胡话检测：同步模型名 + 启动 10s 全程监控（必须在心跳之前）
+
+        // 会话诊断 + 胡话检测：同步模型名 + 启动监控
         this.sessionDiag.setModelName(this.adapter.model);
         this.nonsenseDetector.setModelName(this.adapter.model);
         this.nonsenseDetector.startMonitor();
-        // 注册诊断探活定时任务
+
+        // 注册定时任务
         this.registerDiagnosticPingTask();
-        // 注册模型列表心跳任务（定期检测 LM Studio 加载/卸载）
         this.registerModelListHeartbeat();
-        // 注册 A 型主动性空闲任务（记忆整理 + 任务监控检查 + 会话摘要 GC）
         this.registerProactiveTasks();
-        // Phase 5: 启动韧性心跳（必须在 nonsenseDetector 和诊断任务注册之后）
+
+        // Phase 5: 启动韧性心跳
         this.orchestrator.startHeartbeat();
-        
-        // Phase 1-3 重构：实例化 Handler 模块（真正集成）
+
+        // Phase 1-3 重构：实例化 Handler 模块
         this.chatHandler = createChatHandlerFromAgentCore(this);
         this.commandHandler = createCommandHandlerFromAgentCore(this);
         this.taskHandler = createTaskHandlerFromAgentCore(this);
         logger.info('[Agent] Handler 模块已集成: ChatHandler + CommandHandler + TaskHandler');
-        
+
         const totalTime = Date.now() - initStart;
-        logger.info(`[Agent] ====== 初始化完成 (${totalTime}ms) ======`);
-        logger.info(`Agent core (Phase 5: router+skills+multi-agent+resilience+heartbeat)`);
+        logger.info([Agent] ====== 初始化完成 (ms) ======);
+        logger.info(Agent core (Phase 5: router+skills+multi-agent+resilience+heartbeat));
         return base;
     }
     /** 构造 agent.identity 模板的动态变量字典 */
@@ -425,305 +332,14 @@ class AgentCore {
         }
     };
     async sendMessage(userInput) {
-        const t0 = Date.now();
-        this.messages.push({ role: 'user', content: userInput });
-        logger.info(`[Agent] ┌─ sendMessage() 输入(${userInput.length}字): ${userInput.slice(0, 100)}`);
-        // 全链路追踪：开始
-        this._tracer = getTracer(this.sessionId);
-        const sendSpanId = this._tracer.start('sendMessage', 'Agent', { input: userInput.slice(0, 80) });
-        this._tracer.start('pushMessage', 'Agent', { role: 'user', len: userInput.length });
-        this._tracer.end('pushMessage');
-        // 事件总线：开始 pipeline
-        agentEventBus.startSession(3);
-
-        // 快速通道：/ 开头的命令跳过 LLM 意图解析
-        if (userInput.startsWith('/')) {
-            logger.info('[Agent] │ └─ 路由: /命令 → handleCommand()');
-            this._tracer.start('handleCommand', 'Agent', { cmd: userInput.slice(0, 60) });
-            const reply = await this.handleCommand(userInput);
-            this._tracer.end('handleCommand', { reply_len: reply.length });
-            const dur = Date.now() - t0;
-            this.messages.push({ role: 'assistant', content: reply });
-            this._tracer.end(sendSpanId, { reply_len: reply.length, dur });
-            finishTrace(this.sessionId);
-            logger.info(`[Agent] └─ sendMessage() 完成 (${dur}ms) 回复${reply.length}字`);
-            agentEventBus.endSession(true, '命令完成');
-            return reply;
-        }
-
-        // 注意：/ 命令快速通道不走 recordInteraction / audit / breakIn 评估
-        // 这是设计使然 — 简单查询不需要写入记忆系统。
-        let intent;
-        const intentT0 = Date.now();
-        if (this.config.agent.skipIntentParsing) {
-            // 跳过意图解析（减少一次 LLM 调用，直接路由到聊天）
-            intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.5, needsClarification: false, missingInfo: [] };
-            logger.debug(`[Agent] │ └─ 意图解析已跳过 (skipIntentParsing=true)`);
-        } else {
-            try {
-                intent = await this.intentParser.parse(userInput);
-                logger.info(`[Agent] │ ├─ 意图解析完成 (${Date.now() - intentT0}ms): type=${intent.type} confidence=${intent.confidence} entities=[${(intent.entities || []).map((e: any) => e.name || e).join(', ')}]`);
-            }
-            catch (err: unknown) {
-                intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.3, needsClarification: false, missingInfo: [] };
-                logger.warn(`[Agent] │ ├─ 意图解析失败: ${errorMessage(err)}，降级为 unknown`);
-            }
-        }
-
-        // 事件总线：意图已确定
-        agentEventBus.stepDone(1, 'intent_ready', '意图: ' + (intent.type || 'unknown'));
-        if (intent.needsClarification && intent.missingInfo.length > 0) {
-            const msg = 'Not enough info:\n' + intent.missingInfo.map((i: string) => '  - ' + i).join('\n');
-            this.messages.push({ role: 'assistant', content: msg });
-            this.recordInteraction(userInput, msg);
-            logger.info(`[Agent] └─ sendMessage() 完成 (${Date.now() - t0}ms) [需要澄清]`);
-            agentEventBus.endSession(true, '需要澄清');
-            return msg;
-        }
-
-        let reply;
-        const start = Date.now();
-        const routeLabel = intent.type === 'command' ? 'handleCommand()' : intent.type === 'task' ? `handleTask() intent.confidence=${intent.confidence}` : 'handleChat()';
-        logger.info(`[Agent] │ └─ 路由: ${routeLabel}`);
-        switch (intent.type) {
-            case 'command':
-                // 防御: 只有以 / 开头的才走命令路径，LLM 误判回退到 chat
-                if (!userInput.trim().startsWith('/')) {
-                    logger.info(`[Agent] │ ├─ 意图判为 command 但输入不以 / 开头，回退到 handleChat()`);
-                    reply = await this.handleChat(userInput);
-                } else {
-                    reply = await this.handleCommand(userInput);
-                }
-                break;
-            case 'task':
-                reply = await this.handleTask(intent, userInput);
-                break;
-            default:
-                reply = await this.handleChat(userInput);
-                break;
-        }
-        const duration = Date.now() - start;
-        this.messages.push({ role: 'assistant', content: reply });
-        logger.info(`[Agent] │ ├─ handler 完成 (${duration}ms) 回复${reply.length}字`);
-        this.recordInteraction(userInput, reply);
-        const isError = reply.startsWith('ERR') || reply.startsWith('WARN');
-        this.breakIn.evaluateInteraction({
-            taskType: intent.type, success: !isError, durationMs: duration, toolCalls: intent.type === 'task' ? 2 : 0, toolErrors: isError ? 1 : 0,
-        });
-        this.checkPendingApplies();
-        // 审计: 记录交互
-        this.auditLog.logDecision(intent.type, reply.slice(0, 200), isError ? 'failure' : 'success', { durationMs: duration, inputLength: userInput.length });
-        // P0: 跨会话记忆 — 每次交互后记录决策和实体到数据库
-        this.recordDecision(intent, userInput, reply, isError);
-        this.recordEntities(userInput);
-        // 事件总线：完成
-        agentEventBus.endSession(!isError, isError ? '处理出错' : undefined);
-        // Experience module: 异步提取经验（不阻塞响应）
-        if (this.experienceInitialized && intent.type !== 'command') {
-            const outcome = isError ? 'failure' : 'success';
-            this.experienceExtractor.extract(userInput, reply, outcome, this.sessionId, {
-                modelUsed: this.adapter.model,
-            }).then(id => {
-                if (id !== null) {
-                    logger.debug(`[Agent] 经验已提取: #${id}`);
-                }
-            }).catch(err => {
-                logger.debug('[Agent] 经验提取失败（非阻塞）', err);
-            });
-        }
-        const totalDur = Date.now() - t0;
-        this._tracer.end(sendSpanId, { intent_type: intent.type, reply_len: reply.length, dur: totalDur, isError });
-        finishTrace(this.sessionId);
-        logger.info(`[Agent] └─ sendMessage() 完成 (${totalDur}ms) [${intent.type}] ${isError ? '❌' : '✅'} 回复${reply.length}字`);
-        return reply;
+        return sendMessageCore(this, userInput, false);
     }
     async handleChat(userInput) {
         // Phase 2 重构：委托给 ChatHandler（已集成）
         if (this.chatHandler) return this.chatHandler.handle(userInput);
-        // 以下为原始内联实现（fallback，handler 未初始化时使用）
-        const t0 = Date.now();
-        const chatSpanId = this._tracer?.start('handleChat', 'Agent', { input: userInput.slice(0, 80) });
-        logger.info(`[Agent] ┌─ handleChat() 输入(${userInput.length}字)`);
-        this.nonsenseDetector.markConversationStart(userInput);
-        let chatOutput = '';
-        let chatError = null;
-        try {
-            // 熔断器预检：避免向已知故障模型发送请求
-            if (!this.circuitBreaker.canUseModel(this.adapter.model)) {
-                logger.warn(`[Agent] ⛔ 模型 ${this.adapter.model} 已熔断，尝试恢复...`);
-                const cbResult = await this.recovery.executeProtected(async () => {
-                    const alive = await this.adapter.ping();
-                    if (!alive) throw new Error('model_unreachable (circuit breaker)');
-                    this.circuitBreaker.modelSuccess(this.adapter.model);
-                    return '模型已恢复';
-                }, { taskId: 'cb-recovery-' + Date.now() });
-                if (!cbResult.success) {
-                    return '模型服务当前不可用（已熔断）。请稍后重试或输入 /status 查看系统状态。';
-                }
-            }
-
-            const result = await this.recovery.executeProtected(async () => {
-                const aliveT0 = Date.now();
-                const alive = await this.adapter.ping();
-                logger.debug(`[Agent] │ ├─ ping() ${alive ? '✅' : '❌'} (${Date.now() - aliveT0}ms)`);
-                this.sessionDiag.recordPing(alive);
-                if (!alive) {
-                    this.healthMon.recordPing(false);
-                    this.circuitBreaker.modelFailure(this.adapter.model, 'ping failed');
-                    throw new Error('model_unreachable');
-                }
-                this.healthMon.recordPing(true);
-                this.healthMon.watchTokenStream();
-                // P7: 动态上下文窗口 — 从模型实际 context_length 算有效预算
-                try {
-                    const effectiveWindow = this.adapter.getEffectiveContextWindow();
-                    this.ctxManager.updateConfig({ maxTokens: effectiveWindow });
-                }
-                catch { /* adapter 不支持时忽略 */ }
-
-                // ══ 消息装配追踪：Stage 0 - 原始上下文（每次 handleChat 都重建，确保每条消息独立追踪） ══
-                this._assemblyReport = createAssemblyReport(this.sessionId, userInput);
-                addAssemblyStage(this._assemblyReport, 'raw_input', '原始用户输入', '用户输入+历史消息', this.messages);
-
-                // P7: 上下文管理 — 压缩后发送
-                const ctxResult = await this.ctxManager.process(this.messages, userInput, async (prompt) => {
-                    // 事件总线：模型开始响应
-                    agentEventBus.modelResponding(this.adapter.model);
-                    // LLM Router 统一调用：自动广播 payload
-                    const summarizeMsgs = [{ role: 'user' as const, content: prompt }];
-                    const resp = await llm_router_1.getLLMRouter().call({
-                        taskType: 'summarize',
-                        messages: summarizeMsgs,
-                    });
-                    return resp.choices?.[0]?.message?.content || '';
-                });
-                if (ctxResult.compressed) {
-                    logger.info(`[Agent] 上下文压缩: ${ctxResult.originalTokens} → ${ctxResult.finalTokens} tokens` +
-                        `, ${ctxResult.hotCount} 条热点, 层级 ${ctxResult.compressionLevel}` +
-                        (ctxResult.sessionReset ? ', ⚠️ 会话边界 — 开启新会话' : ''));
-                    this.auditLog.logDegradation(ctxResult.compressionLevel, `context compressed: ${ctxResult.originalTokens}→${ctxResult.finalTokens}` +
-                        (ctxResult.sessionReset ? ' [new session]' : ''), 'compressed', 'attention');
-                    // 会话边界：通知适配器下次请求开启新会话
-                    if (ctxResult.sessionReset) {
-                        try {
-                            this.adapter.markSessionReset();
-                        }
-                        catch {
-                            // stateless API 忽略
-                        }
-                    }
-                }
-                try {
-                    // 事件总线：模型开始响应
-                    agentEventBus.modelResponding(this.adapter.model);
-
-                    // ══ 消息装配追踪：Stage 2 - 压缩后上下文 ══
-                    if (this._assemblyReport) {
-                        addAssemblyStage(this._assemblyReport, 'context_compressed', '上下文压缩后', ctxResult.compressed ? 'ContextManager 已压缩上下文' : '上下文未压缩', ctxResult.messages);
-                    }
-
-                    // Phase 3: 使用 PromptAssembler 组装最终 messages
-                    // ContextManager 已处理压缩，ctxResult.messages 包含处理后的上下文
-                    // Experience module: 检索相关经验（条件性注入）
-                    let experienceBlock: string | undefined;
-                    if (this.experienceInitialized) {
-                        try {
-                            const expResults = this.experienceRetriever.retrieve(userInput, { topK: 3 });
-                            if (expResults.length > 0) {
-                                experienceBlock = this.experienceRetriever.formatBlock(expResults);
-                            }
-                        }
-                        catch (err) {
-                            logger.debug('[Agent] 经验检索失败（非阻塞）', err);
-                        }
-                    }
-
-                    // ══ 消息装配追踪：Stage 3 - 记忆+经验注入前 ══
-                    if (this._assemblyReport && (this._cachedMemoryBlock || experienceBlock)) {
-                        const preInjectMsgs = [...ctxResult.messages];
-                        if (this._cachedMemoryBlock) {
-                            preInjectMsgs.push({ role: 'user', content: `[MEMORY BLOCK即将注入: ${this._cachedMemoryBlock.length}字]` });
-                        }
-                        if (experienceBlock) {
-                            preInjectMsgs.push({ role: 'user', content: `[EXPERIENCE BLOCK即将注入: ${experienceBlock.length}字]` });
-                        }
-                        addAssemblyStage(this._assemblyReport, 'injection_prepare', '记忆/经验准备', `memory=${this._cachedMemoryBlock?.length ?? 0}字, experience=${experienceBlock?.length ?? 0}字`, preInjectMsgs);
-                    }
-
-                    const assembled = this.promptAssembler.assemble({
-                        identityTemplateId: 'agent.identity',
-                        identityVars: this.getIdentityVars(),
-                        memoryBlock: this._cachedMemoryBlock || undefined,
-                        experienceBlock: experienceBlock,
-                        context: ctxResult.messages,
-                        userInput: undefined, // userInput 已在 ctxResult.messages 末尾
-                    });
-                    logger.debug(
-                        `[Agent] PromptAssembler: ${assembled.metadata.totalMessages} 条消息` +
-                        ` hasMemory=${assembled.metadata.hasMemory}` +
-                        ` hasExperience=${assembled.metadata.hasExperience}` +
-                        ` hasSummary=${assembled.metadata.hasSummary}`,
-                    );
-
-                    // ══ 消息装配追踪：Stage 4 - 完整组装后 ══
-                    if (this._assemblyReport) {
-                        addAssemblyStage(this._assemblyReport, 'assembled', 'PromptAssembler 组装后', `memory=${assembled.metadata.hasMemory}, experience=${assembled.metadata.hasExperience}, summary=${assembled.metadata.hasSummary}`, assembled.messages);
-                    }
-
-                    // LLM Router 统一调用：自动广播 payload（附加组装元数据）
-                    const llmT0 = Date.now();
-                    const response = await llm_router_1.getLLMRouter().call({
-                        taskType: 'chat',
-                        messages: assembled.messages,
-                        metadata: { assembler: assembled.metadata },
-                    });
-                    const llmDur = Date.now() - llmT0;
-                    const content = response.choices?.[0]?.message?.content;
-                    const llmPayload = {
-                        taskType: 'chat',
-                        messageCount: assembled.messages.length,
-                        role: (assembled.messages[assembled.messages.length - 1]?.role || '?'),
-                        contentLen: content?.length || 0,
-                        model: this.adapter.model,
-                    };
-                    logger.info(`[Agent] │ ├─ LLM chat() 响应 ${content ? content.length : 0}字 (${llmDur}ms)`);
-
-                    // ══ 消息装配追踪：Stage 5 - 最终发送给模型的 payload ══
-                    if (this._assemblyReport) {
-                        addAssemblyStage(this._assemblyReport, 'llm_payload', 'LLM发送载荷', `模型: ${this.adapter.model}, 温度参数: 默认`, assembled.messages);
-                        logger.info(`[Agent] │ └─ 消息装配流水线:\n${formatAssemblyReport(this._assemblyReport)}`);
-                    }
-
-                    return content ?? '(empty)';
-                }
-                finally {
-                    this.healthMon.endTokenStream();
-                }
-            }, { taskId: 'chat-' + Date.now(), context: { model: this.adapter.model } });
-            // 熔断器反馈：记录成功
-            this.circuitBreaker.modelSuccess(this.adapter.model);
-            chatOutput = this.formatRecoveryResult(result);
-        }
-        catch (err) {
-            logger.error('[Agent] handleChat() 执行失败', err);
-            this.circuitBreaker.modelFailure(this.adapter.model, err.message || 'unknown');
-            this.healthMon.recordPing(false);
-            chatOutput = `ERR: ${err.message || 'unknown error'}`;
-            chatError = err.message || 'unknown error';
-        }
-        // 胡话检测
-        const reason = nonsense_detector_1.NonsenseDetector.detectGibberish(chatOutput);
-        const normal = !reason && !chatError;
-        this.nonsenseDetector.markConversationEnd(normal, userInput, chatOutput, reason || chatError || undefined);
-        if (!normal) {
-            logger.warn(`[Nonsense] handleChat 检测到异常: ${reason || chatError}`);
-        }
-        if (this._tracer && chatSpanId) {
-            if (chatError) this._tracer.error(chatSpanId, chatError);
-            else this._tracer.end(chatSpanId, { reply_len: chatOutput.length, dur: Date.now() - t0 });
-        }
-        logger.info(`[Agent] └─ handleChat() 完成 (${Date.now() - t0}ms) 回复${chatOutput.length}字${chatError ? ' ❌' : ''}`);
-        return chatOutput;
+        // fallback 已移除（chatHandler 在 init() 中始终初始化）
+        // 如需恢复，参见 git history commit 3268ef9 之前的版本
+        throw new Error('chatHandler not initialized');
     }
     /**
      * 流式发送消息 — 与 sendMessage() 相同的 pipeline，但聊天路径使用流式输出
@@ -731,93 +347,7 @@ class AgentCore {
      * 返回完整回复字符串
      */
     async sendMessageStream(userInput) {
-        const t0 = Date.now();
-        this.messages.push({ role: 'user', content: userInput });
-        logger.info(`[Agent] ┌─ sendMessageStream() 输入(${userInput.length}字): ${userInput.slice(0, 100)}`);
-        // 事件总线：开始 pipeline
-        agentEventBus.startSession(3);
-        // 快速通道：/ 开头的命令跳过 LLM 意图解析（非流式）
-        if (userInput.startsWith('/')) {
-            logger.info('[Agent] │ └─ 路由: /命令 → handleCommand()');
-            const reply = await this.handleCommand(userInput);
-            this.messages.push({ role: 'assistant', content: reply });
-            logger.info(`[Agent] └─ sendMessageStream() 完成 (${Date.now() - t0}ms) 回复${reply.length}字`);
-            agentEventBus.endSession(true, '命令完成');
-            return reply;
-        }
-        let intent;
-        const intentT0 = Date.now();
-        if (this.config.agent.skipIntentParsing) {
-            // 跳过意图解析（减少一次 LLM 调用，直接路由到聊天）
-            intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.5, needsClarification: false, missingInfo: [] };
-            logger.debug(`[Agent] │ └─ 意图解析已跳过 (skipIntentParsing=true)`);
-        } else {
-            try {
-                intent = await this.intentParser.parse(userInput);
-                logger.info(`[Agent] │ ├─ 意图解析完成 (${Date.now() - intentT0}ms): type=${intent.type} confidence=${intent.confidence}`);
-            } catch (err: unknown) {
-                intent = { type: 'unknown', summary: userInput.slice(0, 50), entities: [], confidence: 0.3, needsClarification: false, missingInfo: [] };
-                logger.warn(`[Agent] │ ├─ 意图解析失败: ${errorMessage(err)}，降级为 unknown`);
-            }
-        }
-        agentEventBus.stepDone(1, 'intent_ready', '意图: ' + (intent.type || 'unknown'));
-        if (intent.needsClarification && intent.missingInfo.length > 0) {
-            const msg = 'Not enough info:\n' + intent.missingInfo.map((i) => '  - ' + i).join('\n');
-            this.messages.push({ role: 'assistant', content: msg });
-            this.recordInteraction(userInput, msg);
-            agentEventBus.endSession(true, '需要澄清');
-            return msg;
-        }
-        let reply;
-        const t0Stream = Date.now();
-        const routeLabel = intent.type === 'command' ? 'handleCommand()' : intent.type === 'task' ? `handleTask() intent.confidence=${intent.confidence}` : 'handleChatStream()';
-        logger.info(`[Agent] │ └─ 路由: ${routeLabel}`);
-        switch (intent.type) {
-            case 'command':
-                // 防御: 只有以 / 开头的才走命令路径，LLM 误判回退到 chat
-                if (!userInput.trim().startsWith('/')) {
-                    logger.info(`[Agent] │ ├─ 意图判为 command 但输入不以 / 开头，回退到 handleChatStream()`);
-                    reply = await this.handleChatStream(userInput);
-                } else {
-                    reply = await this.handleCommand(userInput);
-                }
-                break;
-            case 'task':
-                reply = await this.handleTask(intent, userInput);
-                break;
-            default:
-                reply = await this.handleChatStream(userInput);
-                break;
-        }
-        const duration = Date.now() - t0;
-        this.messages.push({ role: 'assistant', content: reply });
-        this.recordInteraction(userInput, reply);
-        const isError = reply.startsWith('ERR') || reply.startsWith('WARN');
-        this.breakIn.evaluateInteraction({
-            taskType: intent.type, success: !isError, durationMs: duration, toolCalls: intent.type === 'task' ? 2 : 0, toolErrors: isError ? 1 : 0,
-        });
-        this.checkPendingApplies();
-        this.auditLog.logDecision(intent.type, reply.slice(0, 200), isError ? 'failure' : 'success', { durationMs: duration, inputLength: userInput.length });
-        // P0: 跨会话记忆 — 每次交互后记录决策和实体到数据库
-        this.recordDecision(intent, userInput, reply, isError);
-        this.recordEntities(userInput);
-        agentEventBus.endSession(!isError, isError ? '处理出错' : undefined);
-        // Experience module: 异步提取经验
-        if (this.experienceInitialized && intent.type !== 'command') {
-            const outcome = isError ? 'failure' : 'success';
-            this.experienceExtractor.extract(userInput, reply, outcome, this.sessionId, {
-                modelUsed: this.adapter.model,
-            }).then(id => {
-                if (id !== null)
-                    logger.debug(`[Agent] 经验已提取: #${id}`);
-            }).catch(err => {
-                logger.debug('[Agent] 经验提取失败（非阻塞）', err);
-            });
-        }
-        const totalDur = Date.now() - t0;
-        const streamIsError = reply.startsWith('ERR') || reply.startsWith('WARN');
-        logger.info(`[Agent] └─ sendMessageStream() 完成 (${totalDur}ms) [${intent.type}] ${streamIsError ? '❌' : '✅'} 回复${reply.length}字`);
-        return reply;
+        return sendMessageCore(this, userInput, true);
     }
     /**
      * 流式聊天处理 — 与 handleChat() 相同逻辑，但使用 llmRouter.callStream()
@@ -826,247 +356,14 @@ class AgentCore {
     async handleChatStream(userInput) {
         // Phase 2 重构：委托给 ChatHandler（已集成）
         if (this.chatHandler) return this.chatHandler.handleStream(userInput);
-        // 以下为原始内联实现（fallback）
-        const t0 = Date.now();
-        logger.info(`[Agent] ┌─ handleChatStream() 输入(${userInput.length}字)`);
-        this.nonsenseDetector.markConversationStart(userInput);
-        let chatOutput = '';
-        let chatError = null;
-        const streamStartTime = Date.now();
-        try {
-            // 熔断器预检
-            if (!this.circuitBreaker.canUseModel(this.adapter.model)) {
-                logger.warn(`[Agent][stream] ⛔ 模型 ${this.adapter.model} 已熔断`);
-                const cbResult = await this.recovery.executeProtected(async () => {
-                    const alive = await this.adapter.ping();
-                    if (!alive) throw new Error('model_unreachable (circuit breaker)');
-                    this.circuitBreaker.modelSuccess(this.adapter.model);
-                    return 'ok';
-                }, { taskId: 'cb-stream-recovery-' + Date.now() });
-                if (!cbResult.success) {
-                    return '模型服务当前不可用（已熔断）。请稍后重试。';
-                }
-            }
-
-            chatOutput = await this.recovery.executeProtected(async () => {
-                const aliveT0 = Date.now();
-                const alive = await this.adapter.ping();
-                logger.debug(`[Agent] │ ├─ ping() ${alive ? '✅' : '❌'} (${Date.now() - aliveT0}ms)`);
-                this.sessionDiag.recordPing(alive);
-                if (!alive) {
-                    this.healthMon.recordPing(false);
-                    this.circuitBreaker.modelFailure(this.adapter.model, 'ping failed');
-                    throw new Error('model_unreachable');
-                }
-                this.healthMon.recordPing(true);
-                this.healthMon.watchTokenStream();
-                try {
-                    const effectiveWindow = this.adapter.getEffectiveContextWindow();
-                    this.ctxManager.updateConfig({ maxTokens: effectiveWindow });
-                }
-                catch { }
-                const ctxResult = await this.ctxManager.process(this.messages, userInput, async (prompt) => {
-                    agentEventBus.modelResponding(this.adapter.model);
-                    const summarizeMsgs = [{ role: 'user', content: prompt }];
-                    const resp = await llm_router_1.getLLMRouter().call({
-                        taskType: 'summarize',
-                        messages: summarizeMsgs,
-                    });
-                    return resp.choices?.[0]?.message?.content || '';
-                });
-                if (ctxResult.compressed) {
-                    logger.info(`[Agent] 上下文压缩: ${ctxResult.originalTokens} → ${ctxResult.finalTokens} tokens`);
-                    if (ctxResult.sessionReset) {
-                        try {
-                            this.adapter.markSessionReset();
-                        }
-                        catch { }
-                    }
-                }
-                try {
-                    agentEventBus.modelResponding(this.adapter.model);
-                    // Phase 3: 使用 PromptAssembler 组装最终 messages
-                    let experienceBlock;
-                    if (this.experienceInitialized) {
-                        try {
-                            const expResults = this.experienceRetriever.retrieve(userInput, { topK: 3 });
-                            if (expResults.length > 0) {
-                                experienceBlock = this.experienceRetriever.formatBlock(expResults);
-                            }
-                        }
-                        catch (err) {
-                            logger.debug('[Agent] 经验检索失败（非阻塞）', err);
-                        }
-                    }
-                    const assembled = this.promptAssembler.assemble({
-                        identityTemplateId: 'agent.identity',
-                        identityVars: this.getIdentityVars(),
-                        memoryBlock: this._cachedMemoryBlock || undefined,
-                        experienceBlock: experienceBlock,
-                        context: ctxResult.messages,
-                        userInput: undefined,
-                    });
-                    logger.debug(`[Agent][stream] PromptAssembler: ${assembled.metadata.totalMessages} 条消息`);
-                    // 流式调用 LLM Router
-                    let fullReply = '';
-                    try {
-                        for await (const chunk of llm_router_1.getLLMRouter().callStream({
-                            taskType: 'chat',
-                            messages: assembled.messages,
-                            metadata: { assembler: assembled.metadata },
-                        })) {
-                            fullReply += chunk;
-                            this.healthMon.beat();
-                            agentEventBus.emitChatChunk(chunk);
-                        }
-                    }
-                    catch (streamErr) {
-                        // 流式中断：如果有部分内容，保留并标记 done（前端才能正常切换状态）
-                        if (fullReply.length > 0) {
-                            logger.warn(`[Agent][stream] 流式中断，保留已有内容 (${fullReply.length}字): ${streamErr}`);
-                            const partialDuration = Date.now() - streamStartTime;
-                            agentEventBus.emitChatDone(fullReply, partialDuration);  // 通知前端完成
-                            return fullReply;
-                        } else {
-                            // 无内容：尝试网络错重试 → 非流式回退
-                            const isNetwork = /ECONNREFUSED|ECONNRESET|fetch failed|network/i.test(streamErr.message || '');
-                            if (isNetwork) {
-                                logger.warn(`[Agent][stream] 网络错误，3s 后尝试非流式回退`);
-                                await new Promise(r => setTimeout(r, 3000));
-                            }
-                            try {
-                                const fallbackResp = await llm_router_1.getLLMRouter().call({
-                                    taskType: 'chat',
-                                    messages: assembled.messages,
-                                });
-                                fullReply = fallbackResp.choices?.[0]?.message?.content || '';
-                                if (fullReply) {
-                                    logger.info(`[Agent][stream] 非流式回退成功 (${fullReply.length}字)`);
-                                } else {
-                                    throw streamErr;
-                                }
-                            } catch (fallbackErr) {
-                                throw streamErr;
-                            }
-                        }
-                    }
-                    const duration = Date.now() - streamStartTime;
-                    agentEventBus.emitChatDone(fullReply, duration);
-                    return fullReply || '(empty)';
-                }
-                finally {
-                    this.healthMon.endTokenStream();
-                }
-            }, { taskId: 'chat-stream-' + Date.now(), context: { model: this.adapter.model } });
-            // 熔断器反馈：流式成功
-            this.circuitBreaker.modelSuccess(this.adapter.model);
-            chatOutput = this.formatRecoveryResult(chatOutput);
-        }
-        catch (err) {
-            logger.error('[Agent] handleChatStream() 执行失败', err);
-            this.circuitBreaker.modelFailure(this.adapter.model, err.message || 'unknown');
-            this.healthMon.recordPing(false);
-            chatOutput = `ERR: ${err.message || 'unknown error'}`;
-            chatError = err.message || 'unknown error';
-            agentEventBus.emitChatError(chatError);
-        }
-        const reason = nonsense_detector_1.NonsenseDetector.detectGibberish(chatOutput);
-        const normal = !reason && !chatError;
-        this.nonsenseDetector.markConversationEnd(normal, userInput, chatOutput, reason || chatError || undefined);
-        if (!normal) {
-            logger.warn(`[Nonsense] handleChatStream 检测到异常: ${reason || chatError}`);
-        }
-        logger.info(`[Agent] └─ handleChatStream() 完成 (${Date.now() - t0}ms) 回复${chatOutput.length}字${chatError ? ' ❌' : ''}`);
-        return chatOutput;
+        // fallback 已移除（chatHandler 在 init() 中始终初始化）
+        return this.handleChat(userInput);
     }
     async handleTask(intent, rawMessage) {
         // Phase 3 重构：委托给 TaskHandler（已集成）
         if (this.taskHandler) return this.taskHandler.handle(intent, rawMessage);
-        // 以下为原始内联实现（fallback）
-        const t0 = Date.now();
-        const taskSpanId = this._tracer?.start('handleTask', 'Agent', { intent_type: intent.type, confidence: intent.confidence, summary: intent.summary?.slice(0, 60) });
-        logger.info(`[Agent] ┌─ handleTask() intent.confidence=${intent.confidence} summary=${intent.summary}`);
-        this.nonsenseDetector.markConversationStart(rawMessage);
-        let taskOutput = '';
-        let taskError = null;
-        try {
-            const aliveT0 = Date.now();
-            const alive = await this.adapter.ping();
-            logger.debug(`[Agent] │ ├─ ping() ${alive ? '✅' : '❌'} (${Date.now() - aliveT0}ms)`);
-            this.sessionDiag.recordPing(alive);
-            if (!alive) {
-                this.healthMon.recordPing(false);
-                this.circuitBreaker.modelFailure(this.adapter.model, 'ping failed (handleTask)');
-                this.sessionDiag.recordCircuitBreaker(this.adapter.model, 'LM Studio 不可达 (handleTask)');
-                taskOutput = 'WARN: LM Studio not connected.';
-                taskError = 'model_unreachable';
-                this.nonsenseDetector.markConversationEnd(false, rawMessage, taskOutput, taskError);
-                return taskOutput;
-            }
-            this.circuitBreaker.modelSuccess(this.adapter.model);
-            if (this.isMultiAgentTask(rawMessage)) {
-                logger.info('[Agent] │ └─ 检测为多Agent任务 → handleMultiAgentTask()');
-                taskOutput = await this.handleMultiAgentTask(intent, rawMessage);
-                this.nonsenseDetector.markConversationEnd(true, rawMessage, taskOutput);
-                return taskOutput;
-            }
-            const active = this.projectManager.getActiveProject();
-            const summary = intent.summary || rawMessage.slice(0, 50);
-            if (!active) {
-                const name = this.sanitizeProjectName(summary || 'new-project');
-                this.projectManager.createProject(name, { description: rawMessage.slice(0, 200), priority: 'P1' });
-                this.projectManager.addTodo(name, { title: summary, status: 'in_progress', priority: 'P1' });
-            }
-            else {
-                this.projectManager.addTodo(active.project, { title: summary, status: 'in_progress', priority: intent.confidence > 0.8 ? 'P0' : 'P1' });
-            }
-            // Phase 5: 韧性保护执行 + 步骤级检查点
-            const taskId = 'task-' + Date.now();
-            // 事件总线：执行工具中
-            agentEventBus.toolsExecuting(['orchestrator']);
-            // 注入 LLM 调用函数供重规划使用
-            this.orchestrator.setLLMCall(async (messages) => {
-                const result = await this.llmRouter.call({
-                    taskType: 'task_decompose',
-                    messages: messages as any,
-                    params: { temperature: 0.3, maxTokens: 1024 },
-                });
-                return result.content;
-            });
-            const result = await this.recovery.executeProtected(async () => {
-                this.healthMon.watchTokenStream();
-                try {
-                    const orchT0 = Date.now();
-                    const output = await this.orchestrator.execute(intent, rawMessage, taskId);
-                    logger.info(`[Agent] │ ├─ orchestrator.execute() 完成 (${Date.now() - orchT0}ms)`);
-                    const proj = this.projectManager.getActiveProject();
-                    if (proj)
-                        this.projectManager.recalculateProgress(proj.project);
-                    return output;
-                }
-                finally {
-                    this.healthMon.endTokenStream();
-                }
-            }, { taskId, context: { model: this.adapter.model } });
-            taskOutput = this.formatRecoveryResult(result);
-        }
-        catch (err) {
-            taskOutput = `ERR: ${err.message || 'unknown error'}`;
-            taskError = err.message || 'unknown error';
-        }
-        // 胡话检测
-        const reason = nonsense_detector_1.NonsenseDetector.detectGibberish(taskOutput);
-        const normal = !reason && !taskError;
-        this.nonsenseDetector.markConversationEnd(normal, rawMessage, taskOutput, reason || taskError || undefined);
-        if (!normal) {
-            logger.warn(`[Nonsense] handleTask 检测到异常: ${reason || taskError}`);
-        }
-        if (this._tracer && taskSpanId) {
-            if (taskError) this._tracer.error(taskSpanId, taskError);
-            else this._tracer.end(taskSpanId, { reply_len: taskOutput.length, dur: Date.now() - t0 });
-        }
-        logger.info(`[Agent] └─ handleTask() 完成 (${Date.now() - t0}ms) 回复${taskOutput.length}字${taskError ? ' ❌' : ''}`);
-        return taskOutput;
+        // fallback 已移除（taskHandler 在 init() 中始终初始化）
+        throw new Error('taskHandler not initialized');
     }
     isMultiAgentTask(input) {
         const patterns = [
@@ -1096,96 +393,8 @@ class AgentCore {
     async handleCommand(input) {
         // Phase 1 重构：委托给 CommandHandler（已集成）
         if (this.commandHandler) return this.commandHandler.handle(input);
-        // 以下为原始内联实现（fallback）
-        const t0 = Date.now();
-        const cmd = input.slice(1).toLowerCase().trim();
-        const args = cmd.split(/\s+/);
-        const action = args[0];
-        logger.info(`[Agent] ┌─ handleCommand() action=${action} args=${JSON.stringify(args.slice(1))}`);
-        switch (action) {
-            case 'exit':
-            case 'quit':
-                this.stop();
-                return 'Goodbye!';
-            case 'history':
-                if (this.messages.length <= 1)
-                    return 'No history';
-                return 'History:\n' + this.messages.filter(m => m.role !== 'system').map(m => '[' + m.role + '] ' + m.content.slice(0, 100)).join('\n');
-            case 'status': return this.buildStatus();
-            case 'project': return this.handleProjectCommand(args.slice(1));
-            case 'models': return this.handleModelsCommand(args.slice(1));
-            case 'router': return this.router.status();
-            case 'skills': return this.handleSkillsCommand(args.slice(1));
-            case 'agents': return await this.handleAgentsCommand(args.slice(1));
-            case 'resilience': return this.recovery.status();
-            case 'audit': return this.handleAuditCommand(args.slice(1));
-            case 'summarize': return await this.handleSummarizeCommand(args.slice(1));
-            case 'memory': return this.handleMemoryCommand(args.slice(1));
-            case 'context': return this.handleContextCommand(args.slice(1));
-            case 'idle': return this.handleIdleCommand(args.slice(1));
-            case 'diag': return this.handleDiagCommand(args.slice(1));
-            case 'nonsense':
-                const sub = args.slice(1).join(' ');
-                if (!sub) {
-                    const last = this.nonsenseDetector.getLastConversation();
-                    const active = this.nonsenseDetector.isConversationActive();
-                    const elapsed = this.nonsenseDetector.getConversationElapsedMs();
-                    const elapsedStr = elapsed > 0 ? ` (${(elapsed / 1000).toFixed(0)}s)` : '';
-                    const lines = [
-                        active ? `📞 通话中${elapsedStr}` : '💤 空闲',
-                    ];
-                    if (last) {
-                        lines.push(`上次会话: ${last.endedNormally ? '✅ 正常' : '⚠️ 异常 (' + (last.reason || '?') + ')'}`);
-                        lines.push(`输入: ${last.input.slice(0, 80)}`);
-                        lines.push(`输出: ${last.output.slice(0, 80)}`);
-                    }
-                    else {
-                        lines.push('暂无会话记录');
-                    }
-                    return lines.join('\n');
-                }
-                if (sub === 'force') {
-                    const input = '(手动强制触发) ' + args.slice(2).join(' ') || '手动诊断';
-                    this.nonsenseDetector.markConversationEnd(false, input, '(空)');
-                    this.nonsenseDetector.forceCheck();
-                    return '✅ 已强制触发胡话检测检查';
-                }
-                return '用法: /nonsense 或 /nonsense force [原因]';
-            case 'config':
-                const cfgSub = args.slice(1).join(' ');
-                if (!cfgSub || cfgSub === 'show')
-                    return agent_system_config_1.formatConfig();
-                if (cfgSub === 'reload') {
-                    const result = agent_system_config_1.reloadConfig();
-                    if (result.success) {
-                        this.nonsenseDetector.restartMonitor();
-                        return '✅ 配置已热重载';
-                    }
-                    return `❌ 热重载失败: ${result.errors}`;
-                }
-                if (cfgSub === 'path')
-                    return `📁 ${agent_system_config_1.getConfigFilePath()}`;
-                return '用法: /config [show|reload|path]';
-            case 'exp':
-            case 'experience':
-                if (!this.experienceInitialized) {
-                    return '⚠️ 经验模块未初始化';
-                }
-                return await this.experienceCommandHandler.handle(args.slice(1));
-            case 'resume':
-                return await this.handleResumeCommand(args.slice(1));
-            case 'ckpt':
-            case 'checkpoint':
-                return this.handleCkptCommand(args.slice(1));
-            case 'pause':
-                return this.handlePauseCommand(args.slice(1));
-            case 'help':
-                logger.info(`[Agent] └─ handleCommand() 完成 (${Date.now() - t0}ms) [help]`);
-                return 'Commands:\n  /exit /history /status /project\n  /models [list|scan|switch|detail] — 模型探测与切换\n  /router /skills /agents\n  /resilience /audit /summarize\n  /memory /context /idle /diag /nonsense /config\n  /exp [add|list|view|search|edit|delete|stats|help]\n  /resume [index|taskId] — 恢复长任务\n  /ckpt [list|show|clear] — 检查点管理\n  /pause — 暂停当前任务\n  /help';
-            default:
-                logger.info(`[Agent] └─ handleCommand() 完成 (${Date.now() - t0}ms) [unknown: ${action}]`);
-                return 'Unknown: ' + action;
-        }
+        // fallback 已移除（commandHandler 在 init() 中始终初始化）
+        throw new Error('commandHandler not initialized');
     }
     // ====== 长任务恢复命令 ======
 
