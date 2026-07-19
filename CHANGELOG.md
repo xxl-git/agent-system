@@ -22,17 +22,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`entity-extractor.ts` module extracted from `agent-core.ts`** (48 lines removed)
   - 12 new unit tests covering path/quote/mention/proper-noun/email/url extraction + dedup + maxEntities limit
 - CORS origin allowlist configuration (`server.cors.allowedOrigins` in `agent-system.yaml`)
+- **44 new unit tests for extracted agent-core modules:**
+  - `send-message-core.test.ts` (27 tests) — sendMessage/sendMessageStream routing, intent parsing, fallback, experience extraction
+  - `init-steps.test.ts` (17 tests) — init() 7-step decomposition (memoryStore, checkpoints, database, recovery, summarizer, experience, systemMessage, model)
 
 ### Changed
 - Replaced 14 `console.*` calls with `logger` in `agent-server.ts`
-- Archived 14 historical `.md` reports to `docs/archive/`
-- Root directory `.md` files: 18 → 4 (README, HANDOVER, PLAN, CHANGELOG)
-- Test coverage: 17% → 20% (20 test files / 100 source files)
-- `test:units` script and CI workflow updated to include 3 new test files
+- Archived 18 historical `.md` reports to `docs/archive/` (root directory: 18 → 5 .md files)
+- Test coverage: 12.4% → 16.5% (24 test files / 110 source files)
+- `test:units` script and CI workflow updated to include all new test files
 - **Type safety: all 50+ `catch (err: any)` → `catch (err: unknown)`** across 23 files
   - Added `errorMessage(err: unknown)` helper in modified files
   - Added `execErrorOutput(err: unknown)` helper in `base-tools.ts` for child_process errors
   - `smart-adapter.ts`: `streamError: any` → `streamError: unknown`, added `errorName()` helper
+- **`agent-core.ts` major refactor: 2476 → 790 lines (-68%)**
+  - Extracted 10 independent modules: `entity-extractor`, `model-commands`, `resume-command`, `agents-command`, `summarize-command`, `checkpoint-commands`, `info-commands`, `proactive-tasks`, `send-message-core`, `init-steps`
+  - Each module defines minimal interface to avoid circular dependencies
+  - Removed 4 fallback code blocks (chatHandler/commandHandler/taskHandler always initialized)
+  - Cleaned 8 unused imports (`fs`, `summarizer_1`, `getTracer`, `finishTrace`, `createAssemblyReport`, `addAssemblyStage`, `formatAssemblyReport`, `getAssemblyReport`)
+  - Fixed `init-steps.ts` import paths: relative → `@agent-system/*` package imports
 
 ### Fixed
 - Removed all 13 `@ts-nocheck` directives (4 source + 9 test files)

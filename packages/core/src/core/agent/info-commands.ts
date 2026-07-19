@@ -1,9 +1,9 @@
 // info-commands.ts
 // 从 agent-core.ts 提取的信息查询命令（audit, memory, context, idle, diag, models）
 
-import * as file_store_1 from '../../memory/file-store';
-import * as db_store_1 from '../../memory/db-store';
-import * as model_profile_1 from '../../models/profile/model-profile';
+import * as file_store_1 from '@agent-system/memory';
+import * as db_store_1 from '@agent-system/memory';
+import * as model_profile_1 from '@agent-system/models-core';
 import * as modelCommands from './model-commands';
 
 /** AgentCore 的最小接口（避免循环依赖） */
@@ -25,6 +25,8 @@ interface InfoCommandAgent {
     model: string;
     getEffectiveContextWindow(): number;
     isSessionReset(): boolean;
+    listModels(): Promise<Array<{ id: string; context_length?: number; arch?: string }>>;
+    setModel(model: string): void;
   };
   idleTaskMgr: {
     getStats(): any;
@@ -37,8 +39,11 @@ interface InfoCommandAgent {
     getUndiagnosedSnapshots(): any[];
     getReportPaths(): string[];
     recordManual(reason: string, msgs: any[]): void;
+    setModelName(name: string): void;
   };
   _availableModels: Array<{ id: string; context_length?: number; arch?: string }>;
+  nonsenseDetector: { setModelName(name: string): void };
+  breakIn: { setModelName(name: string): void };
 }
 
 /** 错误信息提取 */
@@ -114,12 +119,12 @@ export function handleMemoryCommand(agent: InfoCommandAgent, args: string[]): st
         case 'decisions': {
             if (!agent.lastMemoryInjection || agent.lastMemoryInjection.recentDecisions.length === 0)
                 return 'No recent decisions';
-            return 'Recent decisions:\n' + agent.lastMemoryInjection.recentDecisions.map(d => '  [' + d.timestamp.slice(0, 16) + '] ' + d.category + ': ' + d.summary).join('\n');
+            return 'Recent decisions:\n' + agent.lastMemoryInjection.recentDecisions.map((d: any) => '  [' + d.timestamp.slice(0, 16) + '] ' + d.category + ': ' + d.summary).join('\n');
         }
         case 'entities': {
             if (!agent.lastMemoryInjection || agent.lastMemoryInjection.trackedEntities.length === 0)
                 return 'No tracked entities';
-            return 'Tracked entities:\n' + agent.lastMemoryInjection.trackedEntities.map(e => '  ' + e.type + ': ' + e.name + ' (' + e.mention_count + 'x)').join('\n');
+            return 'Tracked entities:\n' + agent.lastMemoryInjection.trackedEntities.map((e: any) => '  ' + e.type + ': ' + e.name + ' (' + e.mention_count + 'x)').join('\n');
         }
         case 'reload': {
             try {
