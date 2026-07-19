@@ -1,10 +1,34 @@
 # Agent System — 开发者交接文档
-# 版本: v0.9.2 | 更新: 2026-06-28T17:20 | 状态: ✅ 本地模型自动探测 + 热切换
+# 版本: v0.9.3-dev | 更新: 2026-07-19 | 状态: ✅ agent-core.ts 拆分重构完成
 
 ## 当前状态
 
 ### ✅ 已完成功能
 > 从上到下按完成时间排列，最新在最前
+
+- [x] **agent-core.ts 拆分重构** (2026-07-17 ~ 2026-07-19) — 2476 → 790 行 (-68%)
+  - 提取 10 个独立模块：`entity-extractor`, `model-commands`, `resume-command`, `agents-command`, `summarize-command`, `checkpoint-commands`, `info-commands`, `proactive-tasks`, `send-message-core`, `init-steps`
+  - 每个模块定义最小接口避免循环依赖，使用委托模式
+  - 移除 4 个 fallback 代码块（chatHandler/commandHandler/taskHandler 始终初始化）
+  - 清理 8 个未使用 import
+  - 修复 info-commands.ts / init-steps.ts 的 import 路径（相对路径 → @agent-system/* 包）
+  - 新增 150 个单元测试（entity-extractor 12 + send-message-core 27 + init-steps 17 + model-commands 21 + checkpoint-commands 24 + summarize-command 24 + info-commands 37）
+  - 13/13 核心单元测试全部通过
+
+- [x] **类型安全清理** (2026-07-15) — `catch(err: any)` → `catch(err: unknown)`
+  - 23 个文件，50+ 处替换
+  - 添加 `errorMessage()` + `execErrorOutput()` 辅助函数
+  - 编译通过 + 10/10 单元测试通过
+
+- [x] **全项目审计 + P0/P1/P2 修复** (2026-07-13 ~ 2026-07-14)
+  - 移除所有 13 个 `@ts-nocheck`
+  - 添加 `.env` + `uploads/` 到 `.gitignore`
+  - 重建 CI/CD 工作流（ci.yml + publish.yml + dependabot.yml）
+  - 10 个 packages 各添加 README.md
+  - 归档 18 个历史 .md 文件到 docs/archive/
+  - 添加 LICENSE (MIT) + CONTRIBUTING.md
+  - CORS 来源限制（从 `*` 改为 allowlist）
+  - 清理 console.* 调用（agent-server.ts 14→0）
 
 - [x] **本地模型自动探测 + 热切换** — 启动时自动探测 LM Studio 已加载模型，支持运行时热切换
   - **启动自动探测**：`onboardModel()` 增强 — 调用 `listModels()` 列出所有已加载模型，日志输出模型名/架构/上下文长度
