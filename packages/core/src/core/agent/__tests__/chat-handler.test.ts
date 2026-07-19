@@ -132,7 +132,7 @@ async function testHandleMethod() {
       console.log('  ❌ 应抛出 model_unreachable 错误');
       failed++;
     } catch (err: unknown) {
-      if (err.message === 'model_unreachable') {
+      if (errorMessage(err) === 'model_unreachable') {
         console.log('  ✅ 模型不可达时抛出正确错误');
         passed++;
       } else {
@@ -155,7 +155,7 @@ async function testHandleMethod() {
       console.log('  ❌ 应抛出 empty_response 错误');
       failed++;
     } catch (err: unknown) {
-      if (err.message === 'empty_response') {
+      if (errorMessage(err) === 'empty_response') {
         console.log('  ✅ 空响应时抛出正确错误');
         passed++;
       } else {
@@ -208,7 +208,7 @@ async function testHandleStreamMethod() {
       console.log('  ❌ 应抛出 model_unreachable 错误');
       failed++;
     } catch (err: unknown) {
-      if (err.message === 'model_unreachable') {
+      if (errorMessage(err) === 'model_unreachable') {
         console.log('  ✅ 流式聊天模型不可达时正确处理');
         passed++;
       } else {
@@ -249,7 +249,7 @@ async function testErrorHandling() {
       console.log('  ❌ 应抛出超时错误');
       failed++;
     } catch (err: unknown) {
-      if (err.message === 'llm_timeout') {
+      if (errorMessage(err) === 'llm_timeout') {
         console.log('  ✅ LLM 超时正确处理');
         passed++;
       } else {

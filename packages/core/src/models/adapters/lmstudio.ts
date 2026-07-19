@@ -191,7 +191,7 @@ export class LMStudioAdapter {
       return await this.chatV1(messages);
     } catch (err: unknown) {
       // 如果 v1 失败是因为 reasoning 参数不支持，禁用 v1 并降级
-      const errMsg = err?.message || '';
+      const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg.includes('reasoning') || errMsg.includes('reasoning configuration')) {
         logger.warn(`[LMStudio] 模型 ${this.model} 不支持 reasoning 参数，禁用 v1 API，后续改用 OpenAI 兼容端点`);
         this._v1Unsupported = true;

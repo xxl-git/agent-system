@@ -401,7 +401,7 @@ async function testErrorHandling() {
       console.log('  ❌ 应抛出异常');
       failed++;
     } catch (err: unknown) {
-      if (err.message === 'Command validation failed') {
+      if (errorMessage(err) === 'Command validation failed') {
         console.log('  ✅ 命令异常正确抛出');
         passed++;
       } else {
